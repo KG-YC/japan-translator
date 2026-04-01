@@ -486,7 +486,9 @@ let convoIsRunning = false, convoIsProcessing = false;
 let hasSpoken = false, silenceStart = null;
 let convoAnimFrame = null;
 const SILENCE_THRESHOLD = 12;  // 0-100 RMS
-const SILENCE_DURATION  = 1600; // ms
+const SILENCE_DURATION  = 900;  // ms（短一點讓對話更流暢）
+const MAX_HISTORY = 6;          // 最多保留幾句供上下文
+let convoHistory = [];          // [{lang, original, translation}, ...]
 
 // ============================================================
 // Init
@@ -569,8 +571,8 @@ async function translateAudio(blob, dir) {
   isTranslating[dir] = true;
   resultEl.className = 'result-text loading-dots'; resultEl.textContent = '辨識中';
   const prompt = isZh
-    ? '請辨識這段繁體中文音訊，並翻譯成自然口語的日文（旅遊場景）。只輸出日文翻譯結果：'
-    : '請辨識這段日文音訊，並翻譯成自然口語的繁體中文。只輸出中文翻譯結果：';
+    ? '你是日本旅遊翻譯助手（餐廳、景點、交通、購物、住宿）。請辨識這段繁體中文音訊，翻譯成自然口語且有禮貌的日文（です/ます體）。只輸出日文翻譯結果：'
+    : '你是日本旅遊翻譯助手（餐廳、景點、交通、購物、住宿）。請辨識這段日文音訊，翻譯成自然口語的繁體中文。只輸出中文翻譯結果：';
   try {
     const out = await geminiAudio(blob, prompt);
     resultEl.className = 'result-text'; resultEl.textContent = out;
@@ -595,8 +597,8 @@ async function translateText(dir, text) {
   isTranslating[dir] = true;
   resultEl.className = 'result-text loading-dots'; resultEl.textContent = '翻譯中';
   const prompt = isZh
-    ? `將以下繁體中文翻譯成自然口語的日文（旅遊場景）。只輸出翻譯結果：\n${text}`
-    : `將以下日文翻譯成自然口語的繁體中文。只輸出翻譯結果：\n${text}`;
+    ? `你是日本旅遊翻譯助手（餐廳、景點、交通、購物、住宿）。將以下繁體中文翻譯成自然口語且有禮貌的日文（です/ます體）。只輸出翻譯結果：\n${text}`
+    : `你是日本旅遊翻譯助手（餐廳、景點、交通、購物、住宿）。將以下日文翻譯成自然口語的繁體中文。只輸出翻譯結果：\n${text}`;
   try {
     const out = await geminiText(prompt);
     resultEl.className = 'result-text'; resultEl.textContent = out;
@@ -721,8 +723,16 @@ async function processConvoBlob(blob) {
   scrollConvo();
 
   try {
-    const prompt = `這段音訊可能是繁體中文或日文的對話。
-請辨識語言後翻譯（中文→日文，日文→繁體中文）。
+    const historyText = convoHistory.length > 0
+      ? '\n最近對話記錄（供上下文參考）：\n' +
+        convoHistory.map(h =>
+          `  [${h.lang === 'zh' ? '中' : '日'}] ${h.original} → ${h.translation}`
+        ).join('\n') + '\n'
+      : '';
+
+    const prompt = `你是日本旅遊翻譯助手，場景涵蓋餐廳、景點、交通、購物、住宿、票務、租賃。
+翻譯時使用自然口語；對日本店員/服務人員用敬語（です/ます體）。${historyText}
+這段音訊可能是繁體中文或日文。辨識語言後翻譯（中文→日文，日文→繁體中文）。
 只輸出JSON，不要其他文字：{"lang":"zh或ja","original":"原文","translation":"翻譯結果"}`;
     const raw = await geminiAudio(blob, prompt);
     let result;
@@ -739,6 +749,10 @@ async function processConvoBlob(blob) {
       setConvoStatus('聆聽中...', true);
       return;
     }
+
+    // 存入對話記憶，超過上限就移除最舊的
+    convoHistory.push(result);
+    if (convoHistory.length > MAX_HISTORY) convoHistory.shift();
 
     addConvoBubble(result);
     speakText(result.translation, result.lang === 'zh' ? 'ja-JP' : 'zh-TW');
@@ -798,6 +812,7 @@ function scrollConvo() {
 
 function clearConvo() {
   stopConvo();
+  convoHistory = [];
   const log = document.getElementById('convoLog');
   log.innerHTML = '<div class="convo-empty" id="convoEmpty"><div class="convo-empty-icon">🎤</div><div class="convo-empty-text">按下麥克風開始對話</div></div>';
 }
