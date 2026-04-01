@@ -6,458 +6,262 @@
   <title>中日翻譯</title>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
-    html, body { height: 100%; font-family: -apple-system, 'Hiragino Sans', 'Noto Sans TC', sans-serif; }
+    html, body { height: 100%; font-family: -apple-system, 'Hiragino Sans', 'Noto Sans TC', sans-serif; overflow: hidden; }
 
-    /* ===== MODE TOGGLE HEADER ===== */
+    /* ── Header ── */
     .header {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      padding: 12px 16px;
-      background: #1a1a2e;
-      border-bottom: 1px solid #2d2d4e;
-      flex-shrink: 0;
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 10px 16px; background: #1a1a2e;
+      border-bottom: 1px solid #2d2d4e; flex-shrink: 0;
+      height: 52px;
     }
-    .mode-tabs {
-      display: flex;
-      background: rgba(255,255,255,0.08);
-      border-radius: 20px;
-      padding: 3px;
-      gap: 2px;
-    }
+    .mode-tabs { display: flex; background: rgba(255,255,255,0.09); border-radius: 20px; padding: 3px; gap: 2px; }
     .mode-tab {
-      padding: 7px 18px;
-      border-radius: 16px;
-      border: none;
-      font-size: 14px;
-      font-weight: 600;
-      cursor: pointer;
-      background: transparent;
-      color: #888;
-      transition: all 0.2s;
+      padding: 6px 18px; border-radius: 16px; border: none;
+      font-size: 14px; font-weight: 600; cursor: pointer;
+      background: transparent; color: #777; transition: all .2s;
     }
     .mode-tab.active { background: white; color: #1a1a2e; }
-    .btn-api {
-      background: rgba(255,255,255,0.08);
-      border: none;
-      border-radius: 8px;
-      padding: 7px 12px;
-      color: #888;
-      font-size: 13px;
-      cursor: pointer;
+    .btn-key {
+      background: rgba(255,255,255,0.09); border: none; border-radius: 8px;
+      padding: 7px 13px; color: #777; font-size: 13px; cursor: pointer;
     }
-    .btn-api.ok { color: #68d391; }
+    .btn-key.ok { color: #68d391; }
 
-    /* ===== SCREEN CONTAINERS ===== */
-    .screen { display: none; flex-direction: column; height: calc(100vh - 57px); }
+    /* ── Screens ── */
+    .screen { display: none; flex-direction: column; height: calc(100vh - 52px); }
     .screen.active { display: flex; }
 
-    /* ========================================
+    /* ════════════════════════════
        對譯模式
-    ======================================== */
-    #translateMode { background: #111; }
-
+    ════════════════════════════ */
+    #modeTranslate { background: #111; }
     .panel {
-      flex: 1;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: space-between;
-      padding: 16px 20px 24px;
-      overflow: hidden;
+      flex: 1; display: flex; flex-direction: column;
+      align-items: center; justify-content: space-between;
+      padding: 14px 18px 22px; overflow: hidden;
     }
-    .panel-zh { background: #1a1a2e; border-bottom: 1px solid #333; }
+    .panel-zh { background: #1a1a2e; }
     .panel-ja { background: #0d1b2a; transform: rotate(180deg); }
     .panel-ja-inner {
-      width: 100%; height: 100%;
-      display: flex; flex-direction: column;
-      align-items: center; justify-content: space-between;
-      transform: rotate(180deg);
+      width: 100%; height: 100%; display: flex; flex-direction: column;
+      align-items: center; justify-content: space-between; transform: rotate(180deg);
     }
-    .divider {
-      height: 2px;
-      background: linear-gradient(90deg, transparent, #e94560 30%, #2b6cb0 70%, transparent);
-      flex-shrink: 0;
-    }
+    .divider { height: 2px; flex-shrink: 0; background: linear-gradient(90deg,transparent,#e94560 30%,#2b6cb0 70%,transparent); }
 
-    .panel-status-bar {
-      width: 100%;
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-    }
-    .lang-tag {
-      font-size: 13px; font-weight: 700;
-      padding: 4px 10px; border-radius: 20px;
-    }
-    .panel-zh .lang-tag { background: rgba(233,69,96,0.15); color: #e94560; }
-    .panel-ja .lang-tag { background: rgba(43,108,176,0.2); color: #63b3ed; }
+    .panel-bar { width: 100%; display: flex; align-items: center; justify-content: space-between; }
+    .lang-pill { font-size: 13px; font-weight: 700; padding: 4px 10px; border-radius: 20px; }
+    .panel-zh .lang-pill { background: rgba(233,69,96,.15); color: #e94560; }
+    .panel-ja .lang-pill { background: rgba(43,108,176,.2); color: #63b3ed; }
+    .btn-kbd { background: rgba(255,255,255,.07); color: #666; border: none; border-radius: 8px; padding: 6px 10px; font-size: 13px; cursor: pointer; }
 
-    .btn-small {
-      background: rgba(255,255,255,0.07);
-      color: #666; border: none;
-      border-radius: 8px; padding: 6px 10px;
-      font-size: 13px; cursor: pointer;
-    }
-
-    .type-area { width: 100%; display: none; }
-    .type-area.show { display: block; }
-    .type-input {
-      width: 100%;
-      background: rgba(255,255,255,0.06);
-      border: 1px solid rgba(255,255,255,0.1);
-      border-radius: 12px; padding: 10px 14px;
-      color: #e2e8f0; font-size: 16px;
+    .type-wrap { width: 100%; display: none; }
+    .type-wrap.open { display: block; }
+    .type-box {
+      width: 100%; background: rgba(255,255,255,.06); border: 1px solid rgba(255,255,255,.1);
+      border-radius: 12px; padding: 10px 14px; color: #e2e8f0; font-size: 16px;
       outline: none; resize: none; line-height: 1.5;
     }
-    .type-input::placeholder { color: #444; }
+    .type-box::placeholder { color: #444; }
 
-    .result-area {
-      width: 100%; flex: 1;
-      display: flex; flex-direction: column;
-      align-items: center; justify-content: center;
-      gap: 12px; min-height: 0;
-    }
-    .result-text {
-      font-size: clamp(20px, 5vw, 30px);
-      font-weight: 500; line-height: 1.5;
-      text-align: center; color: #f0f0f0;
-      word-break: break-all;
-    }
-    .result-text.placeholder { font-size: 15px; color: #444; }
-
+    .result-zone { width: 100%; flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; min-height: 0; }
+    .result-txt { font-size: clamp(20px,5vw,30px); font-weight: 500; line-height: 1.5; text-align: center; color: #f0f0f0; word-break: break-all; }
+    .result-txt.dim { font-size: 15px; color: #3a3a55; font-weight: 400; }
     .btn-speak {
-      background: rgba(255,255,255,0.08);
-      border: none; border-radius: 50px;
-      padding: 7px 18px; font-size: 18px;
-      cursor: pointer; flex-shrink: 0;
-      transition: background 0.15s;
+      background: rgba(255,255,255,.08); border: none; border-radius: 50px;
+      padding: 7px 18px; font-size: 18px; cursor: pointer; flex-shrink: 0;
     }
-    .btn-speak:disabled { opacity: 0.2; }
-    .btn-speak.speaking { background: rgba(255,255,255,0.2); animation: speak-pulse 1s ease-in-out infinite; }
+    .btn-speak:disabled { opacity: .2; }
+    .btn-speak.on { background: rgba(255,255,255,.2); animation: blink 1s ease-in-out infinite; }
 
-    .mic-section {
-      width: 100%;
-      display: flex; flex-direction: column;
-      align-items: center; gap: 8px; flex-shrink: 0;
-    }
+    .mic-zone { width: 100%; display: flex; flex-direction: column; align-items: center; gap: 8px; flex-shrink: 0; }
     .mic-btn {
-      width: 80px; height: 80px; border-radius: 50%;
-      border: none; font-size: 34px; cursor: pointer;
-      display: flex; align-items: center; justify-content: center;
-      transition: transform 0.1s;
+      width: 78px; height: 78px; border-radius: 50%; border: none;
+      font-size: 32px; cursor: pointer; transition: transform .1s;
     }
-    .mic-btn:active { transform: scale(0.93); }
-    .panel-zh .mic-btn { background: #e94560; box-shadow: 0 4px 18px rgba(233,69,96,0.4); }
-    .panel-ja .mic-btn { background: #2b6cb0; box-shadow: 0 4px 18px rgba(43,108,176,0.4); }
-    .mic-btn.recording { animation: pulse-ring-zh 1.2s ease-out infinite; }
-    .panel-ja .mic-btn.recording { animation: pulse-ring-ja 1.2s ease-out infinite; }
-    .mic-label { font-size: 13px; font-weight: 600; color: #555; }
-    .panel-zh .mic-label { color: #e94560; }
-    .panel-ja .mic-label { color: #63b3ed; }
+    .mic-btn:active { transform: scale(.92); }
+    .panel-zh .mic-btn { background: #e94560; box-shadow: 0 4px 18px rgba(233,69,96,.4); }
+    .panel-ja .mic-btn { background: #2b6cb0; box-shadow: 0 4px 18px rgba(43,108,176,.4); }
+    .mic-btn.rec { animation: ring-zh 1.2s ease-out infinite; }
+    .panel-ja .mic-btn.rec { animation: ring-ja 1.2s ease-out infinite; }
+    .mic-lbl { font-size: 12px; font-weight: 600; }
+    .panel-zh .mic-lbl { color: #e94560; }
+    .panel-ja .mic-lbl { color: #63b3ed; }
 
-    /* ========================================
+    /* ════════════════════════════
        對話模式
-    ======================================== */
-    #conversationMode { background: #eef0f4; }
+    ════════════════════════════ */
+    #modeConvo { background: #eef0f4; }
 
-    .convo-log {
-      flex: 1; overflow-y: auto;
-      padding: 16px 14px 8px;
-      display: flex; flex-direction: column;
-      gap: 14px;
-    }
-    .convo-log::-webkit-scrollbar { display: none; }
+    .chat-log { flex: 1; overflow-y: auto; padding: 14px 14px 6px; display: flex; flex-direction: column; gap: 12px; }
+    .chat-log::-webkit-scrollbar { display: none; }
 
-    .msg-pair { display: flex; flex-direction: column; gap: 5px; }
+    .msg-pair { display: flex; flex-direction: column; gap: 4px; }
+    .brow { display: flex; align-items: center; gap: 8px; }
+    .brow.indent { margin-left: 16px; }
 
-    .bubble-row {
-      display: flex; align-items: center; gap: 8px;
-    }
-    .bubble-row.translated { margin-left: 18px; }
+    .bubble { padding: 10px 15px; border-radius: 20px; font-size: 16px; line-height: 1.45; max-width: calc(100% - 44px); word-break: break-all; }
+    .bubble.orig { background: white; color: #222; box-shadow: 0 1px 3px rgba(0,0,0,.08); }
+    .bubble.xlat { background: #2563eb; color: white; font-weight: 500; }
 
-    .bubble {
-      padding: 10px 15px;
-      border-radius: 20px;
-      font-size: 16px; line-height: 1.45;
-      max-width: calc(100% - 44px);
-      word-break: break-all;
-    }
-    .bubble.original {
-      background: white;
-      color: #222;
-      border-radius: 20px;
-      box-shadow: 0 1px 3px rgba(0,0,0,0.08);
-    }
-    .bubble.translated-zh { background: #2563eb; color: white; font-weight: 500; }
-    .bubble.translated-ja { background: #2563eb; color: white; font-weight: 500; }
+    .bspeak { flex-shrink: 0; background: none; border: none; font-size: 20px; cursor: pointer; color: #2563eb; padding: 4px; transition: transform .1s; }
+    .bspeak:active { transform: scale(.85); }
+    .bspeak.on { animation: blink 1s ease-in-out infinite; }
 
-    .bubble-speak {
-      flex-shrink: 0;
-      background: none; border: none;
-      font-size: 20px; cursor: pointer;
-      color: #2563eb; padding: 4px;
-      transition: transform 0.1s;
-    }
-    .bubble-speak:active { transform: scale(0.85); }
-    .bubble-speak.speaking { animation: speak-pulse 1s ease-in-out infinite; }
+    .loading-bubble { background: white; border-radius: 20px; padding: 12px 16px; box-shadow: 0 1px 3px rgba(0,0,0,.08); display: flex; gap: 5px; align-items: center; }
+    .dot { width: 7px; height: 7px; border-radius: 50%; background: #bbb; animation: bounce 1.2s ease-in-out infinite; }
+    .dot:nth-child(2) { animation-delay: .2s; }
+    .dot:nth-child(3) { animation-delay: .4s; }
 
-    /* 正在辨識的 loading 泡泡 */
-    .bubble-loading {
-      background: white;
-      border-radius: 20px;
-      padding: 12px 16px;
-      box-shadow: 0 1px 3px rgba(0,0,0,0.08);
-      display: flex; gap: 5px; align-items: center;
-    }
-    .dot {
-      width: 7px; height: 7px; border-radius: 50%;
-      background: #aaa; animation: dot-bounce 1.2s ease-in-out infinite;
-    }
-    .dot:nth-child(2) { animation-delay: 0.2s; }
-    .dot:nth-child(3) { animation-delay: 0.4s; }
-    @keyframes dot-bounce {
-      0%, 80%, 100% { transform: scale(0.7); opacity: 0.5; }
-      40% { transform: scale(1); opacity: 1; }
-    }
+    .chat-empty { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; color: #bbb; gap: 10px; }
+    .chat-empty-icon { font-size: 48px; }
 
-    /* 底部控制列 */
-    .convo-bottom {
-      background: white;
-      border-top: 1px solid #dde0e6;
-      padding: 12px 16px 24px;
-      display: flex;
-      align-items: center;
-      gap: 12px;
-      flex-shrink: 0;
+    .chat-status { text-align: center; font-size: 12px; color: #bbb; padding: 4px 0; flex-shrink: 0; }
+    .chat-status.live { color: #2563eb; }
+
+    .chat-bar {
+      background: white; border-top: 1px solid #dde0e6;
+      padding: 10px 14px 22px; display: flex; align-items: center; gap: 10px; flex-shrink: 0;
     }
-    .convo-side-btns {
-      display: flex; gap: 8px;
-    }
-    .convo-icon-btn {
-      width: 42px; height: 42px;
-      border-radius: 50%; border: none;
-      background: #f0f2f5; color: #555;
-      font-size: 18px; cursor: pointer;
+    .chat-icon-btn { width: 42px; height: 42px; border-radius: 50%; border: none; background: #f0f2f5; color: #555; font-size: 18px; cursor: pointer; display: flex; align-items: center; justify-content: center; }
+    .lang-indicator { flex: 1; display: flex; align-items: center; justify-content: center; gap: 6px; background: #f0f2f5; border-radius: 20px; padding: 8px 12px; font-size: 13px; font-weight: 600; color: #444; }
+    .chat-mic {
+      width: 54px; height: 54px; border-radius: 50%; border: none;
+      background: #2563eb; color: white; font-size: 22px; cursor: pointer;
       display: flex; align-items: center; justify-content: center;
+      box-shadow: 0 3px 12px rgba(37,99,235,.4); flex-shrink: 0; transition: transform .1s;
     }
+    .chat-mic:active { transform: scale(.92); }
+    .chat-mic.rec { background: #dc2626; box-shadow: 0 3px 12px rgba(220,38,38,.4); animation: ring-red 1.2s ease-out infinite; }
 
-    .lang-dir {
-      flex: 1;
-      display: flex; align-items: center;
-      justify-content: center; gap: 6px;
-      background: #f0f2f5;
-      border-radius: 20px; padding: 8px 12px;
-      font-size: 13px; font-weight: 600; color: #444;
-      cursor: pointer;
-    }
-    .lang-dir-arrow { font-size: 16px; color: #2563eb; }
-
-    .convo-mic-btn {
-      width: 56px; height: 56px;
-      border-radius: 50%; border: none;
-      background: #2563eb; color: white;
-      font-size: 24px; cursor: pointer;
-      display: flex; align-items: center; justify-content: center;
-      box-shadow: 0 3px 12px rgba(37,99,235,0.4);
-      flex-shrink: 0;
-      transition: transform 0.1s;
-    }
-    .convo-mic-btn:active { transform: scale(0.93); }
-    .convo-mic-btn.recording {
-      background: #dc2626;
-      box-shadow: 0 3px 12px rgba(220,38,38,0.4);
-      animation: pulse-ring-convo 1.2s ease-out infinite;
-    }
-
-    .convo-status {
-      text-align: center;
-      font-size: 12px; color: #999;
-      padding: 4px 0 0;
-      flex-shrink: 0;
-    }
-    .convo-status.active { color: #2563eb; }
-
-    /* 空狀態 */
-    .convo-empty {
-      flex: 1; display: flex;
-      flex-direction: column;
-      align-items: center; justify-content: center;
-      color: #aaa; gap: 10px;
-    }
-    .convo-empty-icon { font-size: 48px; }
-    .convo-empty-text { font-size: 15px; }
-
-    /* ===== 共用動畫 ===== */
-    @keyframes pulse-ring-zh {
-      0% { box-shadow: 0 0 0 0 rgba(233,69,96,0.5), 0 4px 18px rgba(233,69,96,0.4); }
-      70% { box-shadow: 0 0 0 16px rgba(233,69,96,0), 0 4px 18px rgba(233,69,96,0.4); }
-      100% { box-shadow: 0 0 0 0 rgba(233,69,96,0), 0 4px 18px rgba(233,69,96,0.4); }
-    }
-    @keyframes pulse-ring-ja {
-      0% { box-shadow: 0 0 0 0 rgba(43,108,176,0.5), 0 4px 18px rgba(43,108,176,0.4); }
-      70% { box-shadow: 0 0 0 16px rgba(43,108,176,0), 0 4px 18px rgba(43,108,176,0.4); }
-      100% { box-shadow: 0 0 0 0 rgba(43,108,176,0), 0 4px 18px rgba(43,108,176,0.4); }
-    }
-    @keyframes pulse-ring-convo {
-      0% { box-shadow: 0 0 0 0 rgba(220,38,38,0.4), 0 3px 12px rgba(220,38,38,0.4); }
-      70% { box-shadow: 0 0 0 14px rgba(220,38,38,0), 0 3px 12px rgba(220,38,38,0.4); }
-      100% { box-shadow: 0 0 0 0 rgba(220,38,38,0), 0 3px 12px rgba(220,38,38,0.4); }
-    }
-    @keyframes speak-pulse {
-      0%, 100% { transform: scale(1); }
-      50% { transform: scale(1.12); }
-    }
-    .loading-dots::after { content: ''; animation: dots 1s steps(4, end) infinite; }
-    @keyframes dots {
-      0% { content: ''; } 25% { content: '.'; }
-      50% { content: '..'; } 75% { content: '...'; }
-    }
-
-    /* ===== API Modal ===== */
-    .modal-overlay {
-      display: none; position: fixed; inset: 0;
-      background: rgba(0,0,0,0.7); z-index: 100;
-      align-items: center; justify-content: center;
-    }
-    .modal-overlay.show { display: flex; }
-    .modal {
-      background: #1e2a3a; border-radius: 18px;
-      padding: 26px 22px; width: 88%; max-width: 360px;
-      border: 1px solid #2d3f55;
-    }
+    /* ── API Modal ── */
+    .modal-bg { display: none; position: fixed; inset: 0; background: rgba(0,0,0,.72); z-index: 100; align-items: center; justify-content: center; }
+    .modal-bg.open { display: flex; }
+    .modal { background: #1e2a3a; border-radius: 18px; padding: 24px 20px; width: 88%; max-width: 360px; border: 1px solid #2d3f55; }
     .modal h2 { color: #e2e8f0; font-size: 17px; margin-bottom: 8px; }
     .modal p { color: #718096; font-size: 13px; margin-bottom: 16px; line-height: 1.6; }
     .modal a { color: #63b3ed; }
-    .modal input {
-      width: 100%; background: #111c2a;
-      border: 1px solid #2d3f55; border-radius: 10px;
-      padding: 13px; color: #e2e8f0; font-size: 15px;
-      outline: none; margin-bottom: 14px;
-    }
+    .modal input { width: 100%; background: #111c2a; border: 1px solid #2d3f55; border-radius: 10px; padding: 13px; color: #e2e8f0; font-size: 15px; outline: none; margin-bottom: 14px; }
     .modal input:focus { border-color: #2563eb; }
     .modal-btns { display: flex; gap: 10px; }
-    .btn-save {
-      flex: 1; background: #2563eb; color: white;
-      border: none; border-radius: 10px; padding: 13px;
-      font-size: 15px; font-weight: 700; cursor: pointer;
-    }
-    .btn-cancel {
-      background: rgba(255,255,255,0.07); color: #a0aec0;
-      border: none; border-radius: 10px;
-      padding: 13px 18px; font-size: 15px; cursor: pointer;
-    }
+    .btn-save { flex: 1; background: #2563eb; color: white; border: none; border-radius: 10px; padding: 12px; font-size: 15px; font-weight: 700; cursor: pointer; }
+    .btn-cancel { background: rgba(255,255,255,.07); color: #a0aec0; border: none; border-radius: 10px; padding: 12px 16px; font-size: 15px; cursor: pointer; }
 
-    /* ===== Toast ===== */
-    .toast {
-      position: fixed; bottom: 100px; left: 50%;
-      transform: translateX(-50%);
-      background: rgba(0,0,0,0.8); color: white;
-      padding: 10px 20px; border-radius: 20px;
-      font-size: 14px; z-index: 200;
-      opacity: 0; transition: opacity 0.25s;
-      pointer-events: none; white-space: nowrap;
-    }
+    /* ── Toast ── */
+    .toast { position: fixed; bottom: 90px; left: 50%; transform: translateX(-50%); background: rgba(0,0,0,.82); color: white; padding: 10px 20px; border-radius: 20px; font-size: 14px; z-index: 200; opacity: 0; transition: opacity .25s; pointer-events: none; white-space: nowrap; }
     .toast.show { opacity: 1; }
+
+    /* ── Animations ── */
+    @keyframes ring-zh {
+      0%   { box-shadow: 0 0 0  0   rgba(233,69, 96,.5),0 4px 18px rgba(233,69, 96,.4); }
+      70%  { box-shadow: 0 0 0 16px rgba(233,69, 96,0),  0 4px 18px rgba(233,69, 96,.4); }
+      100% { box-shadow: 0 0 0  0   rgba(233,69, 96,0),  0 4px 18px rgba(233,69, 96,.4); }
+    }
+    @keyframes ring-ja {
+      0%   { box-shadow: 0 0 0  0   rgba(43,108,176,.5),0 4px 18px rgba(43,108,176,.4); }
+      70%  { box-shadow: 0 0 0 16px rgba(43,108,176,0),  0 4px 18px rgba(43,108,176,.4); }
+      100% { box-shadow: 0 0 0  0   rgba(43,108,176,0),  0 4px 18px rgba(43,108,176,.4); }
+    }
+    @keyframes ring-red {
+      0%   { box-shadow: 0 0 0  0   rgba(220,38,38,.5),0 3px 12px rgba(220,38,38,.4); }
+      70%  { box-shadow: 0 0 0 14px rgba(220,38,38,0),  0 3px 12px rgba(220,38,38,.4); }
+      100% { box-shadow: 0 0 0  0   rgba(220,38,38,0),  0 3px 12px rgba(220,38,38,.4); }
+    }
+    @keyframes blink { 0%,100%{transform:scale(1)} 50%{transform:scale(1.1)} }
+    @keyframes bounce { 0%,80%,100%{transform:scale(.7);opacity:.5} 40%{transform:scale(1);opacity:1} }
+    .dots::after { content:''; animation: dotsAnim 1s steps(4,end) infinite; }
+    @keyframes dotsAnim { 0%{content:''} 25%{content:'.'} 50%{content:'..'} 75%{content:'...'} }
   </style>
 </head>
-<body style="display:flex;flex-direction:column;height:100%;">
+<body style="display:flex;flex-direction:column;height:100%">
 
 <!-- Header -->
 <div class="header">
   <div class="mode-tabs">
-    <button class="mode-tab active" id="tabTranslate" onclick="setMode('translate')">對譯</button>
-    <button class="mode-tab" id="tabConvo" onclick="setMode('conversation')">對話</button>
+    <button class="mode-tab active" id="tabT" onclick="switchMode('translate')">對譯</button>
+    <button class="mode-tab"        id="tabC" onclick="switchMode('convo')">對話</button>
   </div>
-  <button class="btn-api" id="apiBtn" onclick="showApiModal()">Key</button>
+  <button class="btn-key" id="keyBtn" onclick="openKeyModal()">Key</button>
 </div>
 
-<!-- ========== 對譯模式 ========== -->
-<div class="screen active" id="translateMode">
+<!-- ══ 對譯模式 ══ -->
+<div class="screen active" id="modeTranslate">
 
-  <!-- 上半：我說中文 -->
   <div class="panel panel-zh">
-    <div class="panel-status-bar">
-      <div class="lang-tag">🇹🇼 中文 → 日本語</div>
-      <button class="btn-small" onclick="toggleType('zh')">⌨️</button>
+    <div class="panel-bar">
+      <div class="lang-pill">🇹🇼 中文 → 日本語</div>
+      <button class="btn-kbd" onclick="toggleKbd('zh')">⌨️</button>
     </div>
-    <div class="type-area" id="typeZh">
-      <textarea class="type-input" id="inputZh" rows="2" placeholder="打字輸入中文..." oninput="autoTranslate('zh')"></textarea>
+    <div class="type-wrap" id="typeZh">
+      <textarea class="type-box" id="inputZh" rows="2" placeholder="打字輸入中文…" oninput="onTypeInput('zh')"></textarea>
     </div>
-    <div class="result-area">
-      <div class="result-text placeholder" id="resultJa">按下麥克風說中文</div>
-      <button class="btn-speak" id="speakJa" onclick="replaySpeak('ja')" disabled>🔊</button>
+    <div class="result-zone">
+      <div class="result-txt dim" id="resJa">按下麥克風說中文</div>
+      <button class="btn-speak" id="spkJa" onclick="replay('ja')" disabled>🔊</button>
     </div>
-    <div class="mic-section">
-      <button class="mic-btn" id="micZh" onclick="toggleMic('zh')">🎤</button>
-      <div class="mic-label" id="micLabelZh">按下說話</div>
+    <div class="mic-zone">
+      <button class="mic-btn" id="micZh" onclick="toggleTransMic('zh')">🎤</button>
+      <div class="mic-lbl" id="lblZh">按下說話</div>
     </div>
   </div>
 
   <div class="divider"></div>
 
-  <!-- 下半：對方說日文（旋轉） -->
   <div class="panel panel-ja">
     <div class="panel-ja-inner">
-      <div class="panel-status-bar">
-        <div class="lang-tag">🇯🇵 日本語 → 中文</div>
-        <button class="btn-small" onclick="toggleType('ja')">⌨️</button>
+      <div class="panel-bar">
+        <div class="lang-pill">🇯🇵 日本語 → 中文</div>
+        <button class="btn-kbd" onclick="toggleKbd('ja')">⌨️</button>
       </div>
-      <div class="type-area" id="typeJa">
-        <textarea class="type-input" id="inputJa" rows="2" placeholder="日本語を入力..." oninput="autoTranslate('ja')"></textarea>
+      <div class="type-wrap" id="typeJa">
+        <textarea class="type-box" id="inputJa" rows="2" placeholder="日本語を入力…" oninput="onTypeInput('ja')"></textarea>
       </div>
-      <div class="result-area">
-        <div class="result-text placeholder" id="resultZh">ボタンを押して話してください</div>
-        <button class="btn-speak" id="speakZh" onclick="replaySpeak('zh')" disabled>🔊</button>
+      <div class="result-zone">
+        <div class="result-txt dim" id="resZh">ボタンを押して話してください</div>
+        <button class="btn-speak" id="spkZh" onclick="replay('zh')" disabled>🔊</button>
       </div>
-      <div class="mic-section">
-        <button class="mic-btn" id="micJa" onclick="toggleMic('ja')">🎤</button>
-        <div class="mic-label" id="micLabelJa">ここを押して話す</div>
+      <div class="mic-zone">
+        <button class="mic-btn" id="micJa" onclick="toggleTransMic('ja')">🎤</button>
+        <div class="mic-lbl" id="lblJa">ここを押して話す</div>
       </div>
     </div>
   </div>
 
 </div>
 
-<!-- ========== 對話模式 ========== -->
-<div class="screen" id="conversationMode">
+<!-- ══ 對話模式 ══ -->
+<div class="screen" id="modeConvo">
 
-  <!-- 對話記錄 -->
-  <div class="convo-log" id="convoLog">
-    <div class="convo-empty" id="convoEmpty">
-      <div class="convo-empty-icon">🎤</div>
-      <div class="convo-empty-text">按下麥克風開始對話</div>
+  <div class="chat-log" id="chatLog">
+    <div class="chat-empty" id="chatEmpty">
+      <div class="chat-empty-icon">🎤</div>
+      <div>按下麥克風開始對話</div>
     </div>
   </div>
 
-  <div class="convo-status" id="convoStatus">準備就緒</div>
+  <div class="chat-status" id="chatStatus">準備就緒</div>
 
-  <!-- 底部工具列 -->
-  <div class="convo-bottom">
-    <div class="convo-side-btns">
-      <button class="convo-icon-btn" onclick="clearConvo()" title="清除對話">🗑️</button>
-      <button class="convo-icon-btn" onclick="showApiModal()" title="設定">⚙️</button>
+  <div class="chat-bar">
+    <div style="display:flex;gap:8px">
+      <button class="chat-icon-btn" onclick="clearChat()" title="清除">🗑️</button>
+      <button class="chat-icon-btn" onclick="openKeyModal()" title="設定">⚙️</button>
     </div>
-    <div class="lang-dir" id="langDirBtn" onclick="swapLangDir()">
-      <span id="langFrom">🇹🇼 中</span>
-      <span class="lang-dir-arrow">⇄</span>
-      <span id="langTo">日 🇯🇵</span>
-    </div>
-    <button class="convo-mic-btn" id="convoMicBtn" onclick="toggleConvo()">🎤</button>
+    <div class="lang-indicator">🇹🇼 中 ⇄ 日 🇯🇵</div>
+    <button class="chat-mic" id="chatMic" onclick="toggleConvo()">🎤</button>
   </div>
 
 </div>
 
 <!-- API Modal -->
-<div class="modal-overlay" id="apiModal">
+<div class="modal-bg" id="keyModal">
   <div class="modal">
     <h2>🔑 Gemini API Key</h2>
     <p>到 Google AI Studio 取得免費 Key，只存在本機。<br>
-    <a href="https://aistudio.google.com/app/apikey" target="_blank">aistudio.google.com/app/apikey</a></p>
-    <input type="password" id="apiKeyInput" placeholder="AIza..." autocomplete="off">
+       <a href="https://aistudio.google.com/app/apikey" target="_blank">aistudio.google.com/app/apikey</a></p>
+    <input type="password" id="keyInput" placeholder="AIza…" autocomplete="off">
     <div class="modal-btns">
-      <button class="btn-cancel" onclick="hideApiModal()">取消</button>
-      <button class="btn-save" onclick="saveApiKey()">儲存</button>
+      <button class="btn-cancel" onclick="closeKeyModal()">取消</button>
+      <button class="btn-save"   onclick="saveKey()">儲存</button>
     </div>
   </div>
 </div>
@@ -465,407 +269,393 @@
 <div class="toast" id="toast"></div>
 
 <script>
-// ============================================================
+'use strict';
+
+// ══════════════════════════════════════════════
+// Config
+// ══════════════════════════════════════════════
+const GEMINI_URL = key =>
+  `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${key}`;
+
+// blob-size 語音偵測（完全不需要 AudioContext）
+const CHUNK_MS      = 500;   // MediaRecorder timeslice
+const SPEECH_BYTES  = 2000;  // chunk > 這個 = 偵測到說話
+const SILENCE_BYTES = 900;   // chunk < 這個 = 靜音
+const SILENT_NEEDED = 2;     // 連續幾個靜音 chunk 才送出（= 1 秒靜音）
+
+const MAX_HISTORY = 6;       // 對話記憶保留句數
+
+// ══════════════════════════════════════════════
 // State
-// ============================================================
-let apiKey = localStorage.getItem('gemini_api_key') || '';
-let currentMode = 'translate';
+// ══════════════════════════════════════════════
+let apiKey = localStorage.getItem('gemini_key') || '';
 
-// 對譯模式 state
-let transMediaRecorder = null, transAudioChunks = [], transActiveDir = null;
-let isRecording = { zh: false, ja: false };
-let isTranslating = { zh: false, ja: false };
-let autoTimer = { zh: null, ja: null };
-let lastTranslated = { ja: '', zh: '' };
-let isSpeaking = false;
+// 對譯
+let transRec = null, transDir = null;
+let transRecording = { zh: false, ja: false };
+let transTranslating = { zh: false, ja: false };
+let transLast = { ja: '', zh: '' };
+let typeTimer = { zh: null, ja: null };
 
-// 對話模式 state
-let convoStream = null, convoAudioCtx = null, convoAnalyser = null;
-let convoRecorder = null, convoChunks = [];
-let convoIsRunning = false, convoIsProcessing = false;
-let hasSpoken = false, silenceStart = null;
-let convoSilenceTimer = null;
-const SILENCE_THRESHOLD = 12;  // 0-100 RMS
-const SILENCE_DURATION  = 900;  // ms（短一點讓對話更流暢）
-const MAX_HISTORY = 6;          // 最多保留幾句供上下文
-let convoHistory = [];          // [{lang, original, translation}, ...]
+// 對話
+let convoStream = null, convoRec = null;
+let convoRunning = false, convoProcessing = false;
+let convoHistory = [];   // [{lang, original, translation}]
+let convoQueue = [];     // 待處理 blob 佇列
 
-// ============================================================
+// TTS
+let speaking = false;
+
+// ══════════════════════════════════════════════
 // Init
-// ============================================================
-window.addEventListener('load', () => {
-  updateApiBtn();
-  if (!apiKey) setTimeout(showApiModal, 600);
-  ['inputZh','inputJa'].forEach(id => {
-    document.getElementById(id)?.addEventListener('keydown', e => {
-      if (e.key === 'Enter' && !e.shiftKey) {
-        e.preventDefault();
-        const dir = id === 'inputZh' ? 'zh' : 'ja';
-        translateText(dir, e.target.value);
-      }
-    });
+// ══════════════════════════════════════════════
+addEventListener('load', () => {
+  updateKeyBtn();
+  if (!apiKey) setTimeout(openKeyModal, 600);
+
+  document.getElementById('inputZh').addEventListener('keydown', e => {
+    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); translateText('zh', e.target.value); }
+  });
+  document.getElementById('inputJa').addEventListener('keydown', e => {
+    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); translateText('ja', e.target.value); }
   });
 });
 
-// ============================================================
-// Mode switch
-// ============================================================
-function setMode(mode) {
-  currentMode = mode;
-  document.getElementById('translateMode').classList.toggle('active', mode === 'translate');
-  document.getElementById('conversationMode').classList.toggle('active', mode === 'conversation');
-  document.getElementById('tabTranslate').classList.toggle('active', mode === 'translate');
-  document.getElementById('tabConvo').classList.toggle('active', mode === 'conversation');
-  if (mode === 'translate') stopConvo();
+// ══════════════════════════════════════════════
+// Mode Switch
+// ══════════════════════════════════════════════
+function switchMode(m) {
+  ['translate','convo'].forEach(id => {
+    document.getElementById('mode' + id.charAt(0).toUpperCase() + id.slice(1))
+      .classList.toggle('active', id === m);
+  });
+  document.getElementById('tabT').classList.toggle('active', m === 'translate');
+  document.getElementById('tabC').classList.toggle('active', m === 'convo');
+  if (m === 'translate') stopConvo();
 }
 
-// ============================================================
-// ===== 對譯模式 =====
-// ============================================================
-function toggleMic(dir) {
-  if (isRecording[dir]) stopTransMic(dir);
+// ══════════════════════════════════════════════
+// ── 對譯模式 ──
+// ══════════════════════════════════════════════
+function toggleTransMic(dir) {
+  if (transRecording[dir]) stopTransMic(dir);
   else startTransMic(dir);
 }
 
 function startTransMic(dir) {
   stopSpeech();
-  if (!apiKey) { showApiModal(); return; }
-  navigator.mediaDevices.getUserMedia({ audio: true })
-    .then(stream => {
-      const mime = bestMime();
-      transMediaRecorder = new MediaRecorder(stream, mime ? { mimeType: mime } : {});
-      transAudioChunks = [];
-      transActiveDir = dir;
-      transMediaRecorder.ondataavailable = e => { if (e.data.size > 0) transAudioChunks.push(e.data); };
-      transMediaRecorder.onstop = () => {
-        stream.getTracks().forEach(t => t.stop());
-        const blob = new Blob(transAudioChunks, { type: transMediaRecorder.mimeType || 'audio/mp4' });
-        translateAudio(blob, dir);
-      };
-      transMediaRecorder.start();
-      isRecording[dir] = true;
-      const btn = document.getElementById(dir === 'zh' ? 'micZh' : 'micJa');
-      btn.textContent = '⏹'; btn.classList.add('recording');
-      setTransLabel(dir, dir === 'zh' ? '錄音中，再按停止' : '録音中、もう一度押して停止');
-    })
-    .catch(() => showToast('無法存取麥克風，請確認權限'));
+  if (!apiKey) { openKeyModal(); return; }
+  navigator.mediaDevices.getUserMedia({ audio: true }).then(stream => {
+    const mime = bestMime();
+    transRec = new MediaRecorder(stream, mime ? { mimeType: mime } : {});
+    transDir = dir;
+    const chunks = [];
+    transRec.ondataavailable = e => { if (e.data.size > 0) chunks.push(e.data); };
+    transRec.onstop = () => {
+      stream.getTracks().forEach(t => t.stop());
+      const blob = new Blob(chunks, { type: transRec.mimeType || 'audio/mp4' });
+      doTranslateAudio(blob, dir);
+    };
+    transRec.start();
+    transRecording[dir] = true;
+    const btn = document.getElementById(dir === 'zh' ? 'micZh' : 'micJa');
+    btn.textContent = '⏹'; btn.classList.add('rec');
+    setTransLabel(dir, dir === 'zh' ? '錄音中，再按停止' : '録音中…もう一度で停止');
+  }).catch(() => toast('無法存取麥克風，請確認權限'));
 }
 
 function stopTransMic(dir) {
-  if (transMediaRecorder && transMediaRecorder.state !== 'inactive') transMediaRecorder.stop();
-  transMediaRecorder = null; transActiveDir = null;
-  isRecording[dir] = false;
+  if (transRec && transRec.state !== 'inactive') transRec.stop();
+  transRec = null; transDir = null; transRecording[dir] = false;
   const btn = document.getElementById(dir === 'zh' ? 'micZh' : 'micJa');
-  btn.textContent = '🎤'; btn.classList.remove('recording');
+  btn.textContent = '🎤'; btn.classList.remove('rec');
   setTransLabel(dir, dir === 'zh' ? '按下說話' : 'ここを押して話す');
 }
 
-function setTransLabel(dir, text) {
-  document.getElementById(dir === 'zh' ? 'micLabelZh' : 'micLabelJa').textContent = text;
+function setTransLabel(dir, t) {
+  document.getElementById(dir === 'zh' ? 'lblZh' : 'lblJa').textContent = t;
 }
 
-async function translateAudio(blob, dir) {
-  if (isTranslating[dir]) return;
+async function doTranslateAudio(blob, dir) {
+  if (transTranslating[dir]) return;
   const isZh = dir === 'zh';
-  const resultEl = document.getElementById(isZh ? 'resultJa' : 'resultZh');
-  isTranslating[dir] = true;
-  resultEl.className = 'result-text loading-dots'; resultEl.textContent = '辨識中';
+  const resEl = document.getElementById(isZh ? 'resJa' : 'resZh');
+  transTranslating[dir] = true;
+  resEl.className = 'result-txt dots'; resEl.textContent = '辨識中';
+
+  // 英文 prompt 防止 Gemini 把 prompt 文字當成音訊內容
   const prompt = isZh
-    ? '你是日本旅遊翻譯助手（餐廳、景點、交通、購物、住宿）。請辨識這段繁體中文音訊，翻譯成自然口語且有禮貌的日文（です/ます體）。只輸出日文翻譯結果：'
-    : '你是日本旅遊翻譯助手（餐廳、景點、交通、購物、住宿）。請辨識這段日文音訊，翻譯成自然口語的繁體中文。只輸出中文翻譯結果：';
+    ? 'You are a Japan travel translator. Transcribe the Mandarin Chinese audio, then translate it into natural polite Japanese (desu/masu style, travel context: restaurant, sightseeing, transport, shopping). Output ONLY the Japanese translation, nothing else.'
+    : 'You are a Japan travel translator. Transcribe the Japanese audio, then translate it into natural Traditional Chinese (travel context: restaurant, sightseeing, transport, shopping). Output ONLY the Traditional Chinese translation, nothing else.';
+
   try {
-    const out = await geminiAudio(blob, prompt);
-    resultEl.className = 'result-text'; resultEl.textContent = out;
-    const outDir = isZh ? 'ja' : 'zh';
-    lastTranslated[outDir] = out;
-    const speakBtn = document.getElementById(isZh ? 'speakJa' : 'speakZh');
-    if (speakBtn) speakBtn.disabled = false;
+    const out = await callGeminiAudio(blob, prompt);
+    resEl.className = 'result-txt'; resEl.textContent = out;
+    transLast[isZh ? 'ja' : 'zh'] = out;
+    const spkBtn = document.getElementById(isZh ? 'spkJa' : 'spkZh');
+    spkBtn.disabled = false;
     speakText(out, isZh ? 'ja-JP' : 'zh-TW');
   } catch(e) {
-    resultEl.className = 'result-text placeholder';
-    resultEl.textContent = isZh ? '按下麥克風說中文' : 'ボタンを押して話してください';
-    showToast('失敗：' + e.message);
-  } finally { isTranslating[dir] = false; }
+    resEl.className = 'result-txt dim';
+    resEl.textContent = isZh ? '按下麥克風說中文' : 'ボタンを押して話してください';
+    toast('失敗：' + e.message);
+  } finally { transTranslating[dir] = false; }
 }
 
 async function translateText(dir, text) {
   text = (text || '').trim();
-  if (!text || !apiKey) return;
-  if (isTranslating[dir]) return;
+  if (!text || !apiKey || transTranslating[dir]) return;
   const isZh = dir === 'zh';
-  const resultEl = document.getElementById(isZh ? 'resultJa' : 'resultZh');
-  isTranslating[dir] = true;
-  resultEl.className = 'result-text loading-dots'; resultEl.textContent = '翻譯中';
+  const resEl = document.getElementById(isZh ? 'resJa' : 'resZh');
+  transTranslating[dir] = true;
+  resEl.className = 'result-txt dots'; resEl.textContent = '翻譯中';
+
   const prompt = isZh
-    ? `你是日本旅遊翻譯助手（餐廳、景點、交通、購物、住宿）。將以下繁體中文翻譯成自然口語且有禮貌的日文（です/ます體）。只輸出翻譯結果：\n${text}`
-    : `你是日本旅遊翻譯助手（餐廳、景點、交通、購物、住宿）。將以下日文翻譯成自然口語的繁體中文。只輸出翻譯結果：\n${text}`;
+    ? `You are a Japan travel translator. Translate the following Traditional Chinese into natural polite Japanese (desu/masu, travel context). Output ONLY the Japanese translation:\n${text}`
+    : `You are a Japan travel translator. Translate the following Japanese into natural Traditional Chinese (travel context). Output ONLY the Traditional Chinese translation:\n${text}`;
+
   try {
-    const out = await geminiText(prompt);
-    resultEl.className = 'result-text'; resultEl.textContent = out;
-    const outDir = isZh ? 'ja' : 'zh';
-    lastTranslated[outDir] = out;
-    document.getElementById(isZh ? 'speakJa' : 'speakZh').disabled = false;
+    const out = await callGeminiText(prompt);
+    resEl.className = 'result-txt'; resEl.textContent = out;
+    transLast[isZh ? 'ja' : 'zh'] = out;
+    document.getElementById(isZh ? 'spkJa' : 'spkZh').disabled = false;
   } catch(e) {
-    resultEl.className = 'result-text placeholder';
-    resultEl.textContent = isZh ? '按下麥克風說中文' : 'ボタンを押して話してください';
-    showToast('翻譯失敗：' + e.message);
-  } finally { isTranslating[dir] = false; }
+    resEl.className = 'result-txt dim';
+    resEl.textContent = isZh ? '按下麥克風說中文' : 'ボタンを押して話してください';
+    toast('翻譯失敗：' + e.message);
+  } finally { transTranslating[dir] = false; }
 }
 
-function autoTranslate(dir) {
-  clearTimeout(autoTimer[dir]);
+function onTypeInput(dir) {
+  clearTimeout(typeTimer[dir]);
   const el = document.getElementById(dir === 'zh' ? 'inputZh' : 'inputJa');
-  autoTimer[dir] = setTimeout(() => translateText(dir, el.value), 1200);
+  typeTimer[dir] = setTimeout(() => translateText(dir, el.value), 1200);
 }
 
-function toggleType(dir) {
-  const area = document.getElementById(dir === 'zh' ? 'typeZh' : 'typeJa');
-  area.classList.toggle('show');
-  if (area.classList.contains('show')) document.getElementById(dir === 'zh' ? 'inputZh' : 'inputJa')?.focus();
+function toggleKbd(dir) {
+  const wrap = document.getElementById(dir === 'zh' ? 'typeZh' : 'typeJa');
+  wrap.classList.toggle('open');
+  if (wrap.classList.contains('open'))
+    document.getElementById(dir === 'zh' ? 'inputZh' : 'inputJa').focus();
 }
 
-// ============================================================
-// ===== 對話模式 =====
-// ============================================================
+function replay(dir) {
+  const t = transLast[dir];
+  if (t) speakText(t, dir === 'ja' ? 'ja-JP' : 'zh-TW');
+}
+
+// ══════════════════════════════════════════════
+// ── 對話模式 ──
+// ══════════════════════════════════════════════
 function toggleConvo() {
-  if (convoIsRunning) stopConvo();
-  else startConvo();
+  if (convoRunning) stopConvo(); else startConvo();
 }
 
 function startConvo() {
-  if (!apiKey) { showApiModal(); return; }
-  navigator.mediaDevices.getUserMedia({ audio: true })
-    .then(stream => {
-      convoStream = stream;
-      convoAudioCtx = new AudioContext();
-      const source = convoAudioCtx.createMediaStreamSource(stream);
-      convoAnalyser = convoAudioCtx.createAnalyser();
-      convoAnalyser.fftSize = 512;
-      source.connect(convoAnalyser);
-
-      convoIsRunning = true;
-      document.getElementById('convoMicBtn').textContent = '⏹';
-      document.getElementById('convoMicBtn').classList.add('recording');
-      setConvoStatus('聆聽中...', true);
-
-      // iOS 需要明確 resume AudioContext，否則音量偵測全部回傳 0
-      convoAudioCtx.resume().then(() => {
-        startConvoRecorder();
-        // 用 setInterval 取代 requestAnimationFrame，iOS 背景不會被節流
-        convoSilenceTimer = setInterval(monitorSilence, 100);
-      });
-
-    })
-    .catch(() => showToast('無法存取麥克風，請確認權限'));
+  if (!apiKey) { openKeyModal(); return; }
+  navigator.mediaDevices.getUserMedia({ audio: true }).then(stream => {
+    convoStream = stream;
+    convoRunning = true;
+    document.getElementById('chatMic').textContent = '⏹';
+    document.getElementById('chatMic').classList.add('rec');
+    setChatStatus('聆聽中…', true);
+    startConvoRecorder();
+  }).catch(() => toast('無法存取麥克風，請確認權限'));
 }
 
 function stopConvo() {
-  convoIsRunning = false;
-  if (convoSilenceTimer) { clearInterval(convoSilenceTimer); convoSilenceTimer = null; }
-  if (convoRecorder && convoRecorder.state !== 'inactive') {
-    convoRecorder.onstop = null; // 停止時不處理最後一段
-    convoRecorder.stop();
+  convoRunning = false;
+  if (convoRec && convoRec.state !== 'inactive') {
+    convoRec.ondataavailable = null; convoRec.onstop = null; convoRec.stop();
   }
-  convoRecorder = null;
+  convoRec = null;
   if (convoStream) { convoStream.getTracks().forEach(t => t.stop()); convoStream = null; }
-  if (convoAudioCtx) { convoAudioCtx.close(); convoAudioCtx = null; }
-  convoAnalyser = null; hasSpoken = false; silenceStart = null;
-
-  const btn = document.getElementById('convoMicBtn');
-  btn.textContent = '🎤'; btn.classList.remove('recording');
-  setConvoStatus('準備就緒', false);
+  document.getElementById('chatMic').textContent = '🎤';
+  document.getElementById('chatMic').classList.remove('rec');
+  setChatStatus('準備就緒', false);
 }
 
 function startConvoRecorder() {
-  if (!convoIsRunning || !convoStream) return;
+  if (!convoRunning || !convoStream) return;
   const mime = bestMime();
-  convoRecorder = new MediaRecorder(convoStream, mime ? { mimeType: mime } : {});
-  convoChunks = [];
-  convoRecorder.ondataavailable = e => { if (e.data.size > 0) convoChunks.push(e.data); };
-  convoRecorder.onstop = () => {
-    const blob = new Blob(convoChunks, { type: convoRecorder.mimeType || 'audio/mp4' });
-    if (convoIsRunning) startConvoRecorder(); // 立刻開始錄下一段
-    if (blob.size > 4000) processConvoBlob(blob); // 過小的跳過
-  };
-  convoRecorder.start(100);
-  hasSpoken = false; silenceStart = null;
+  convoRec = new MediaRecorder(convoStream, mime ? { mimeType: mime } : {});
 
-  // 保底：最多錄 15 秒強制切斷，避免 AudioContext 失效時卡死
-  setTimeout(() => {
-    if (convoRecorder && convoRecorder.state === 'recording') {
-      convoRecorder.stop();
+  // ── blob-size 語音偵測 ──
+  // 不用 AudioContext，靠壓縮後 chunk 大小判斷有沒有聲音
+  // 說話時 chunk 大（壓縮率低），靜音時 chunk 小（幾乎全壓掉）
+  let accChunks = [];   // 本次語音段累積的 chunks
+  let hasSpeech = false;
+  let silentCnt = 0;
+
+  convoRec.ondataavailable = e => {
+    if (!convoRunning) return;
+    const sz = e.data.size;
+
+    if (sz >= SPEECH_BYTES) {
+      // 語音 chunk
+      hasSpeech = true;
+      silentCnt = 0;
+      accChunks.push(e.data);
+      setChatStatus('偵測到說話…', true);
+
+    } else if (hasSpeech) {
+      // 語音後的靜音 chunk
+      accChunks.push(e.data);
+      if (sz < SILENCE_BYTES) silentCnt++;
+
+      if (silentCnt >= SILENT_NEEDED) {
+        // 足夠靜音 → 切段
+        const blob = new Blob(accChunks, { type: convoRec.mimeType || 'audio/mp4' });
+        accChunks = []; hasSpeech = false; silentCnt = 0;
+        setChatStatus('辨識中…', true);
+        enqueueConvoBlob(blob);
+      }
     }
-  }, 15000);
+    // 說話前靜音 chunk 直接丟棄（不累積無意義靜音）
+  };
+
+  convoRec.onstop = null;
+  convoRec.start(CHUNK_MS);
 }
 
-function monitorSilence() {
-  if (!convoIsRunning || !convoAnalyser) return;
-  const data = new Uint8Array(convoAnalyser.fftSize);
-  convoAnalyser.getByteTimeDomainData(data);
-  let sum = 0;
-  for (let i = 0; i < data.length; i++) { const v = (data[i] - 128) / 128; sum += v * v; }
-  const rms = Math.sqrt(sum / data.length) * 100;
+// 佇列處理，避免同時送多個 API 請求
+function enqueueConvoBlob(blob) {
+  convoQueue.push(blob);
+  if (!convoProcessing) drainQueue();
+}
 
-  if (rms >= SILENCE_THRESHOLD) {
-    hasSpoken = true; silenceStart = null;
-  } else if (hasSpoken) {
-    if (!silenceStart) silenceStart = Date.now();
-    else if (Date.now() - silenceStart > SILENCE_DURATION) {
-      if (convoRecorder && convoRecorder.state === 'recording') {
-        convoRecorder.stop(); // onstop 會自動重啟
-      }
-      hasSpoken = false; silenceStart = null;
-    }
+async function drainQueue() {
+  if (convoQueue.length === 0) {
+    convoProcessing = false;
+    if (convoRunning) setChatStatus('聆聽中…', true);
+    return;
   }
+  convoProcessing = true;
+  const blob = convoQueue.shift();
+  await processConvoBlob(blob);
+  drainQueue();
 }
 
 async function processConvoBlob(blob) {
-  if (convoIsProcessing) return; // 避免同時送多個
-  convoIsProcessing = true;
-  setConvoStatus('辨識中...', true);
+  // loading 泡泡
+  const loader = document.createElement('div');
+  loader.className = 'loading-bubble';
+  loader.innerHTML = '<div class="dot"></div><div class="dot"></div><div class="dot"></div>';
+  document.getElementById('chatEmpty')?.remove();
+  document.getElementById('chatLog').appendChild(loader);
+  scrollChat();
 
-  // 插入 loading 泡泡
-  const loadingEl = document.createElement('div');
-  loadingEl.className = 'bubble-loading';
-  loadingEl.innerHTML = '<div class="dot"></div><div class="dot"></div><div class="dot"></div>';
-  document.getElementById('convoEmpty')?.remove();
-  document.getElementById('convoLog').appendChild(loadingEl);
-  scrollConvo();
+  // 歷史記錄文字（英文格式，不夾中日文混合）
+  const historyLines = convoHistory.map(h =>
+    `[${h.lang === 'zh' ? 'ZH' : 'JA'}] ${h.original} → ${h.translation}`
+  ).join('\n');
+
+  const prompt =
+    `You are a Japan travel interpreter (restaurant, sightseeing, transport, shopping, accommodation, rental, tickets).
+Rules:
+- Detect if the audio is Mandarin Chinese or Japanese.
+- If Chinese → translate to polite Japanese (desu/masu style).
+- If Japanese → translate to Traditional Chinese.
+- If the audio is silent, noise, or unclear → set original to empty string "".
+- Use the conversation history below for context (pronouns like "that one", "this", etc.).
+${historyLines ? 'Recent conversation:\n' + historyLines : ''}
+Output ONLY valid JSON, no other text:
+{"lang":"zh or ja","original":"transcribed text, or empty string if unclear","translation":"translated text, or empty string if unclear"}`;
 
   try {
-    const historyText = convoHistory.length > 0
-      ? '\n最近對話記錄（供上下文參考）：\n' +
-        convoHistory.map(h =>
-          `  [${h.lang === 'zh' ? '中' : '日'}] ${h.original} → ${h.translation}`
-        ).join('\n') + '\n'
-      : '';
+    const raw = await callGeminiAudio(blob, prompt);
+    const jsonStr = raw.match(/\{[\s\S]*?\}/)?.[0] || raw;
+    const result = JSON.parse(jsonStr);
 
-    const prompt = `你是日本旅遊翻譯助手，場景涵蓋餐廳、景點、交通、購物、住宿、票務、租賃。
-翻譯時使用自然口語；對日本店員/服務人員用敬語（です/ます體）。${historyText}
-這段音訊可能是繁體中文或日文。辨識語言後翻譯（中文→日文，日文→繁體中文）。
-如果音訊是靜音、雜訊、或聽不清楚，original 回傳空字串。
-只輸出JSON，不要其他文字：{"lang":"zh或ja","original":"原文或空字串","translation":"翻譯結果或空字串"}`;
-    const raw = await geminiAudio(blob, prompt);
-    let result;
-    try {
-      const jsonStr = raw.match(/\{[\s\S]*\}/)?.[0] || raw;
-      result = JSON.parse(jsonStr);
-    } catch { result = null; }
+    loader.remove();
 
-    loadingEl.remove();
-
-    if (!result || !result.original || result.original.trim().length < 1) {
-      // 無效音訊（靜音/雜訊）略過
-      convoIsProcessing = false;
-      setConvoStatus('聆聽中...', true);
+    // 靜音/雜訊 → 略過，不顯示
+    if (!result?.original?.trim()) {
       return;
     }
 
-    // 存入對話記憶，超過上限就移除最舊的
+    // 存入記憶
     convoHistory.push(result);
     if (convoHistory.length > MAX_HISTORY) convoHistory.shift();
 
-    addConvoBubble(result);
+    addChatBubble(result);
     speakText(result.translation, result.lang === 'zh' ? 'ja-JP' : 'zh-TW');
-    setConvoStatus('聆聽中...', true);
 
   } catch(e) {
-    loadingEl.remove();
-    showToast('辨識失敗：' + e.message);
-    setConvoStatus('聆聽中...', true);
+    loader.remove();
+    // JSON 解析失敗或 API 錯誤 → 靜默略過，不打擾對話
+    console.warn('convo error:', e.message);
   }
-  convoIsProcessing = false;
 }
 
-function addConvoBubble(result) {
-  const isZhSpeaker = result.lang === 'zh';
+function addChatBubble(r) {
+  const isZhSpk = r.lang === 'zh';
   const pair = document.createElement('div');
   pair.className = 'msg-pair';
 
-  // 原文泡泡
-  const origRow = document.createElement('div');
-  origRow.className = 'bubble-row';
-  const origBubble = document.createElement('div');
-  origBubble.className = 'bubble original';
-  origBubble.textContent = result.original;
-  const origSpeak = makeSpeakBtn(result.original, isZhSpeaker ? 'zh-TW' : 'ja-JP');
-  origRow.appendChild(origBubble);
-  origRow.appendChild(origSpeak);
+  // 原文
+  const rOrig = document.createElement('div');
+  rOrig.className = 'brow';
+  const bOrig = document.createElement('div'); bOrig.className = 'bubble orig'; bOrig.textContent = r.original;
+  const sOrig = makeBSpeak(r.original, isZhSpk ? 'zh-TW' : 'ja-JP');
+  rOrig.append(bOrig, sOrig);
 
-  // 翻譯泡泡
-  const transRow = document.createElement('div');
-  transRow.className = 'bubble-row translated';
-  const transBubble = document.createElement('div');
-  transBubble.className = `bubble ${isZhSpeaker ? 'translated-ja' : 'translated-zh'}`;
-  transBubble.textContent = result.translation;
-  const transSpeak = makeSpeakBtn(result.translation, isZhSpeaker ? 'ja-JP' : 'zh-TW');
-  transRow.appendChild(transBubble);
-  transRow.appendChild(transSpeak);
+  // 翻譯
+  const rXlat = document.createElement('div');
+  rXlat.className = 'brow indent';
+  const bXlat = document.createElement('div'); bXlat.className = 'bubble xlat'; bXlat.textContent = r.translation;
+  const sXlat = makeBSpeak(r.translation, isZhSpk ? 'ja-JP' : 'zh-TW');
+  rXlat.append(bXlat, sXlat);
 
-  pair.appendChild(origRow);
-  pair.appendChild(transRow);
-  document.getElementById('convoLog').appendChild(pair);
-  scrollConvo();
+  pair.append(rOrig, rXlat);
+  document.getElementById('chatLog').appendChild(pair);
+  scrollChat();
 }
 
-function makeSpeakBtn(text, lang) {
-  const btn = document.createElement('button');
-  btn.className = 'bubble-speak';
-  btn.textContent = '🔊';
-  btn.onclick = () => speakText(text, lang);
-  return btn;
+function makeBSpeak(text, lang) {
+  const b = document.createElement('button');
+  b.className = 'bspeak'; b.textContent = '🔊';
+  b.onclick = () => speakText(text, lang);
+  return b;
 }
 
-function scrollConvo() {
-  const log = document.getElementById('convoLog');
+function scrollChat() {
+  const log = document.getElementById('chatLog');
   setTimeout(() => { log.scrollTop = log.scrollHeight; }, 50);
 }
 
-function clearConvo() {
+function clearChat() {
   stopConvo();
-  convoHistory = [];
-  const log = document.getElementById('convoLog');
-  log.innerHTML = '<div class="convo-empty" id="convoEmpty"><div class="convo-empty-icon">🎤</div><div class="convo-empty-text">按下麥克風開始對話</div></div>';
+  convoHistory = []; convoQueue = [];
+  document.getElementById('chatLog').innerHTML =
+    '<div class="chat-empty" id="chatEmpty"><div class="chat-empty-icon">🎤</div><div>按下麥克風開始對話</div></div>';
+  setChatStatus('準備就緒', false);
 }
 
-function setConvoStatus(text, active) {
-  const el = document.getElementById('convoStatus');
-  el.textContent = text;
-  el.className = 'convo-status' + (active ? ' active' : '');
+function setChatStatus(t, live) {
+  const el = document.getElementById('chatStatus');
+  el.textContent = t;
+  el.className = 'chat-status' + (live ? ' live' : '');
 }
 
-function swapLangDir() {
-  // 目前只是視覺，Gemini 會自動偵測語言，這個只是提示
-  const from = document.getElementById('langFrom');
-  const to = document.getElementById('langTo');
-  [from.textContent, to.textContent] = [to.textContent, from.textContent];
-}
-
-// ============================================================
+// ══════════════════════════════════════════════
 // Gemini API
-// ============================================================
-async function geminiAudio(blob, prompt) {
-  const base64 = await new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onloadend = () => resolve(reader.result.split(',')[1]);
-    reader.onerror = reject;
-    reader.readAsDataURL(blob);
+// ══════════════════════════════════════════════
+async function callGeminiAudio(blob, promptText) {
+  if (!apiKey) throw new Error('未設定 API Key');
+  const b64 = await blobToB64(blob);
+  const mime = blob.type.split(';')[0] || 'audio/mp4';
+  const res = await fetch(GEMINI_URL(apiKey), {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      contents: [{ parts: [
+        { inline_data: { mime_type: mime, data: b64 } },
+        { text: promptText }
+      ]}],
+      generationConfig: { temperature: 0.1, maxOutputTokens: 400 }
+    })
   });
-  const mimeType = blob.type.split(';')[0] || 'audio/mp4';
-  const res = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`,
-    {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        contents: [{ parts: [
-          { inline_data: { mime_type: mimeType, data: base64 } },
-          { text: prompt }
-        ]}],
-        generationConfig: { temperature: 0.2, maxOutputTokens: 400 }
-      })
-    }
-  );
   if (!res.ok) { const e = await res.json(); throw new Error(e.error?.message || `HTTP ${res.status}`); }
   const data = await res.json();
   const out = data.candidates?.[0]?.content?.parts?.[0]?.text?.trim();
@@ -873,85 +663,85 @@ async function geminiAudio(blob, prompt) {
   return out;
 }
 
-async function geminiText(prompt) {
-  const res = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`,
-    {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        contents: [{ parts: [{ text: prompt }] }],
-        generationConfig: { temperature: 0.2, maxOutputTokens: 300 }
-      })
-    }
-  );
+async function callGeminiText(promptText) {
+  if (!apiKey) throw new Error('未設定 API Key');
+  const res = await fetch(GEMINI_URL(apiKey), {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      contents: [{ parts: [{ text: promptText }] }],
+      generationConfig: { temperature: 0.1, maxOutputTokens: 300 }
+    })
+  });
   if (!res.ok) { const e = await res.json(); throw new Error(e.error?.message || `HTTP ${res.status}`); }
   const data = await res.json();
   const out = data.candidates?.[0]?.content?.parts?.[0]?.text?.trim();
   if (!out) throw new Error('空回應');
   return out;
+}
+
+function blobToB64(blob) {
+  return new Promise((res, rej) => {
+    const r = new FileReader();
+    r.onloadend = () => res(r.result.split(',')[1]);
+    r.onerror = rej;
+    r.readAsDataURL(blob);
+  });
 }
 
 function bestMime() {
-  return ['audio/mp4', 'audio/webm;codecs=opus', 'audio/webm']
-    .find(t => MediaRecorder.isTypeSupported(t)) || '';
+  return ['audio/mp4','audio/webm;codecs=opus','audio/webm'].find(t => MediaRecorder.isTypeSupported(t)) || '';
 }
 
-// ============================================================
+// ══════════════════════════════════════════════
 // TTS
-// ============================================================
+// ══════════════════════════════════════════════
 function speakText(text, lang) {
   if (!window.speechSynthesis || !text) return;
   stopSpeech();
-  const utter = new SpeechSynthesisUtterance(text);
-  utter.lang = lang; utter.rate = 0.9;
-  utter.onstart = () => { isSpeaking = true; };
-  const done = () => { isSpeaking = false; document.querySelectorAll('.btn-speak.speaking,.bubble-speak.speaking').forEach(b => b.classList.remove('speaking')); };
-  utter.onend = done; utter.onerror = done;
-  window.speechSynthesis.speak(utter);
-}
-
-function replaySpeak(dir) {
-  const text = lastTranslated[dir];
-  if (!text) return;
-  speakText(text, dir === 'ja' ? 'ja-JP' : 'zh-TW');
+  const u = new SpeechSynthesisUtterance(text);
+  u.lang = lang; u.rate = 0.9;
+  u.onstart = () => { speaking = true; };
+  const done = () => { speaking = false; };
+  u.onend = done; u.onerror = done;
+  speechSynthesis.speak(u);
 }
 
 function stopSpeech() {
-  if (window.speechSynthesis) window.speechSynthesis.cancel();
-  isSpeaking = false;
+  if (window.speechSynthesis) speechSynthesis.cancel();
+  speaking = false;
 }
 
-// ============================================================
-// API Key
-// ============================================================
-function showApiModal() {
-  document.getElementById('apiKeyInput').value = apiKey;
-  document.getElementById('apiModal').classList.add('show');
+// ══════════════════════════════════════════════
+// API Key Modal
+// ══════════════════════════════════════════════
+function openKeyModal() {
+  document.getElementById('keyInput').value = apiKey;
+  document.getElementById('keyModal').classList.add('open');
 }
-function hideApiModal() { document.getElementById('apiModal').classList.remove('show'); }
-function saveApiKey() {
-  const k = document.getElementById('apiKeyInput').value.trim();
-  if (!k) { showToast('請輸入 API Key'); return; }
-  apiKey = k; localStorage.setItem('gemini_api_key', k);
-  updateApiBtn(); hideApiModal(); showToast('已儲存 ✓');
+function closeKeyModal() { document.getElementById('keyModal').classList.remove('open'); }
+function saveKey() {
+  const k = document.getElementById('keyInput').value.trim();
+  if (!k) { toast('請輸入 API Key'); return; }
+  apiKey = k; localStorage.setItem('gemini_key', k);
+  updateKeyBtn(); closeKeyModal(); toast('已儲存 ✓');
 }
-function updateApiBtn() {
-  const btn = document.getElementById('apiBtn');
-  btn.textContent = apiKey ? '✓' : 'Key';
-  btn.className = apiKey ? 'btn-api ok' : 'btn-api';
+function updateKeyBtn() {
+  const b = document.getElementById('keyBtn');
+  b.textContent = apiKey ? '✓' : 'Key';
+  b.className = apiKey ? 'btn-key ok' : 'btn-key';
 }
-document.getElementById('apiModal').addEventListener('click', e => {
-  if (e.target === document.getElementById('apiModal')) hideApiModal();
+document.getElementById('keyModal').addEventListener('click', e => {
+  if (e.target === document.getElementById('keyModal')) closeKeyModal();
 });
 
-// ============================================================
+// ══════════════════════════════════════════════
 // Toast
-// ============================================================
-function showToast(msg) {
-  const t = document.getElementById('toast');
-  t.textContent = msg; t.classList.add('show');
-  setTimeout(() => t.classList.remove('show'), 2800);
+// ══════════════════════════════════════════════
+function toast(msg) {
+  const el = document.getElementById('toast');
+  el.textContent = msg; el.classList.add('show');
+  setTimeout(() => el.classList.remove('show'), 2800);
 }
 </script>
 </body>
