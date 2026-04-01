@@ -344,16 +344,17 @@ function startTransMic(dir) {
   if (!apiKey) { openKeyModal(); return; }
   navigator.mediaDevices.getUserMedia({ audio: true }).then(stream => {
     const mime = bestMime();
-    transRec = new MediaRecorder(stream, mime ? { mimeType: mime } : {});
+    const rec = new MediaRecorder(stream, mime ? { mimeType: mime } : {});
+    transRec = rec;
     transDir = dir;
     const chunks = [];
-    transRec.ondataavailable = e => { if (e.data.size > 0) chunks.push(e.data); };
-    transRec.onstop = () => {
+    rec.ondataavailable = e => { if (e.data.size > 0) chunks.push(e.data); };
+    rec.onstop = () => {
       stream.getTracks().forEach(t => t.stop());
-      const blob = new Blob(chunks, { type: transRec.mimeType || 'audio/mp4' });
+      const blob = new Blob(chunks, { type: rec.mimeType || 'audio/mp4' });
       doTranslateAudio(blob, dir);
     };
-    transRec.start();
+    rec.start();
     transRecording[dir] = true;
     const btn = document.getElementById(dir === 'zh' ? 'micZh' : 'micJa');
     btn.textContent = '⏹'; btn.classList.add('rec');
