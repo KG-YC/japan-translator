@@ -538,16 +538,21 @@ async function processConvoBlob(blob) {
   ).join('\n');
 
   const prompt =
-    `You are a Japan travel interpreter (restaurant, sightseeing, transport, shopping, accommodation, rental, tickets).
-Rules:
-- Detect if the audio is Mandarin Chinese or Japanese.
-- If Chinese → translate to polite Japanese (desu/masu style).
+    `You are a transcription and translation tool, NOT a conversational AI.
+Your ONLY job: transcribe exactly what is spoken in the audio, then translate it.
+DO NOT generate new dialogue. DO NOT continue the conversation. DO NOT add anything not spoken in the audio.
+
+Context (use ONLY to resolve pronouns like "that one / this / it" — do NOT respond to it):
+${historyLines || '(none)'}
+
+Task:
+- Detect language: Mandarin Chinese or Japanese.
+- If Chinese → translate to polite Japanese (desu/masu, Japan travel context).
 - If Japanese → translate to Traditional Chinese.
-- If the audio is silent, noise, or unclear → set original to empty string "".
-- Use the conversation history below for context (pronouns like "that one", "this", etc.).
-${historyLines ? 'Recent conversation:\n' + historyLines : ''}
+- If audio is silent, noise, or unclear → set both fields to empty string "".
+
 Output ONLY valid JSON, no other text:
-{"lang":"zh or ja","original":"transcribed text, or empty string if unclear","translation":"translated text, or empty string if unclear"}`;
+{"lang":"zh or ja","original":"exact transcription or empty","translation":"translation or empty"}`;
 
   try {
     const raw = await callGeminiAudio(blob, prompt);
