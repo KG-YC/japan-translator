@@ -64,7 +64,8 @@
     }
     .type-box::placeholder { color: #444; }
 
-    .result-zone { width: 100%; flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; min-height: 0; }
+    .result-zone { width: 100%; flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; min-height: 0; }
+    .result-orig { font-size: 13px; color: #555; text-align: center; word-break: break-all; width: 100%; min-height: 18px; }
     .result-txt { font-size: clamp(20px,5vw,30px); font-weight: 500; line-height: 1.5; text-align: center; color: #f0f0f0; word-break: break-all; }
     .result-txt.dim { font-size: 15px; color: #3a3a55; font-weight: 400; }
     .btn-speak {
@@ -196,6 +197,7 @@
       <textarea class="type-box" id="inputZh" rows="2" placeholder="打字輸入中文…" oninput="onTypeInput('zh')"></textarea>
     </div>
     <div class="result-zone">
+      <div class="result-orig" id="origZh"></div>
       <div class="result-txt dim" id="resJa">按下麥克風說中文</div>
       <button class="btn-speak" id="spkJa" onclick="replay('ja')" disabled>🔊</button>
     </div>
@@ -217,6 +219,7 @@
         <textarea class="type-box" id="inputJa" rows="2" placeholder="日本語を入力…" oninput="onTypeInput('ja')"></textarea>
       </div>
       <div class="result-zone">
+        <div class="result-orig" id="origJa"></div>
         <div class="result-txt dim" id="resZh">ボタンを押して話してください</div>
         <button class="btn-speak" id="spkZh" onclick="replay('zh')" disabled>🔊</button>
       </div>
@@ -381,18 +384,25 @@ async function doTranslateAudio(blob, dir) {
   transTranslating[dir] = true;
   resEl.className = 'result-txt dots'; resEl.textContent = '辨識中';
 
-  // 英文 prompt 防止 Gemini 把 prompt 文字當成音訊內容
   const prompt = isZh
-    ? 'You are a Japan travel translator. Transcribe the Mandarin Chinese audio, then translate it into natural polite Japanese (desu/masu style, travel context: restaurant, sightseeing, transport, shopping). Output ONLY the Japanese translation, nothing else.'
-    : 'You are a Japan travel translator. Transcribe the Japanese audio, then translate it into natural Traditional Chinese (travel context: restaurant, sightseeing, transport, shopping). Output ONLY the Traditional Chinese translation, nothing else.';
+    ? 'You are a Japan travel translator. Transcribe the Mandarin Chinese audio exactly, then translate to natural polite Japanese (desu/masu, travel context). Output ONLY valid JSON: {"original":"Chinese transcription","translation":"Japanese translation"}'
+    : 'You are a Japan travel translator. Transcribe the Japanese audio exactly, then translate to Traditional Chinese (travel context). Output ONLY valid JSON: {"original":"Japanese transcription","translation":"Traditional Chinese translation"}';
 
   try {
-    const out = await callGeminiAudio(blob, prompt);
-    resEl.className = 'result-txt'; resEl.textContent = out;
-    transLast[isZh ? 'ja' : 'zh'] = out;
+    const raw = await callGeminiAudio(blob, prompt);
+    let original = '', translation = raw;
+    try {
+      const j = JSON.parse(raw.match(/\{[\s\S]*\}/)?.[0] || raw);
+      original = j.original || ''; translation = j.translation || raw;
+    } catch {}
+
+    const origEl = document.getElementById(isZh ? 'origZh' : 'origJa');
+    if (origEl) origEl.textContent = original;
+    resEl.className = 'result-txt'; resEl.textContent = translation;
+    transLast[isZh ? 'ja' : 'zh'] = translation;
     const spkBtn = document.getElementById(isZh ? 'spkJa' : 'spkZh');
     spkBtn.disabled = false;
-    speakText(out, isZh ? 'ja-JP' : 'zh-TW');
+    speakText(translation, isZh ? 'ja-JP' : 'zh-TW');
   } catch(e) {
     resEl.className = 'result-txt dim';
     resEl.textContent = isZh ? '按下麥克風說中文' : 'ボタンを押して話してください';
@@ -414,6 +424,8 @@ async function translateText(dir, text) {
 
   try {
     const out = await callGeminiText(prompt);
+    const origEl = document.getElementById(isZh ? 'origZh' : 'origJa');
+    if (origEl) origEl.textContent = text;
     resEl.className = 'result-txt'; resEl.textContent = out;
     transLast[isZh ? 'ja' : 'zh'] = out;
     document.getElementById(isZh ? 'spkJa' : 'spkZh').disabled = false;
