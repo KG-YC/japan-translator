@@ -416,7 +416,9 @@
 <script>
 // ===== State =====
 let apiKey = localStorage.getItem('gemini_api_key') || '';
-let recognition = { zh: null, ja: null };
+let mediaRecorder = null;
+let audioChunks = [];
+let activeRecordingDir = null;
 let isRecording = { zh: false, ja: false };
 let isTranslating = { zh: false, ja: false };
 let autoTimer = { zh: null, ja: null };
@@ -435,64 +437,119 @@ function toggleMic(dir) {
 }
 
 function startMic(dir) {
-  // 按下麥克風時，先取消正在播放的語音
   stopSpeech();
-
-  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
-  if (!SR) {
-    showToast('語音不支援，請用打字模式 ⌨️');
-    return;
-  }
   if (!apiKey) { showApiModal(); return; }
 
-  const rec = new SR();
-  rec.lang = dir === 'zh' ? 'zh-TW' : 'ja-JP';
-  rec.continuous = false;
-  rec.interimResults = true;
+  navigator.mediaDevices.getUserMedia({ audio: true })
+    .then(stream => {
+      // 選擇裝置支援的格式（iOS = mp4，Android/Chrome = webm）
+      const mimeType = ['audio/mp4', 'audio/webm;codecs=opus', 'audio/webm', '']
+        .find(t => t === '' || MediaRecorder.isTypeSupported(t));
 
-  rec.onstart = () => {
-    isRecording[dir] = true;
-    const btn = document.getElementById(dir === 'zh' ? 'micZh' : 'micJa');
-    btn.textContent = '⏹';
-    btn.classList.add('recording');
-    setLabel(dir, dir === 'zh' ? '聆聽中...' : '聞いています...');
-  };
+      mediaRecorder = new MediaRecorder(stream, mimeType ? { mimeType } : {});
+      audioChunks = [];
+      activeRecordingDir = dir;
 
-  rec.onresult = (e) => {
-    let final = '', interim = '';
-    for (let i = e.resultIndex; i < e.results.length; i++) {
-      const t = e.results[i][0].transcript;
-      e.results[i].isFinal ? (final += t) : (interim += t);
-    }
-    const val = final || interim;
-    // 在打字框顯示辨識到的文字（如果打字框開著）
-    const inputEl = document.getElementById(dir === 'zh' ? 'inputZh' : 'inputJa');
-    if (inputEl) inputEl.value = val;
-    if (final) translate(dir, final);
-  };
+      mediaRecorder.ondataavailable = e => {
+        if (e.data.size > 0) audioChunks.push(e.data);
+      };
 
-  rec.onerror = (e) => {
-    const msgs = { 'not-allowed': '請允許麥克風權限', 'network': '網路錯誤', 'no-speech': '沒偵測到聲音' };
-    showToast(msgs[e.error] || `錯誤：${e.error}`);
-    stopMic(dir);
-  };
+      mediaRecorder.onstop = () => {
+        stream.getTracks().forEach(t => t.stop());
+        const blob = new Blob(audioChunks, { type: mediaRecorder.mimeType || 'audio/mp4' });
+        translateAudio(blob, dir);
+      };
 
-  rec.onend = () => stopMic(dir);
-
-  recognition[dir] = rec;
-  try { rec.start(); } catch(e) { stopMic(dir); }
+      mediaRecorder.start();
+      isRecording[dir] = true;
+      const btn = document.getElementById(dir === 'zh' ? 'micZh' : 'micJa');
+      btn.textContent = '⏹';
+      btn.classList.add('recording');
+      setLabel(dir, dir === 'zh' ? '錄音中，再按停止' : '録音中、もう一度押して停止');
+    })
+    .catch(() => showToast('無法存取麥克風，請確認權限'));
 }
 
 function stopMic(dir) {
-  if (recognition[dir]) {
-    try { recognition[dir].stop(); } catch(e) {}
-    recognition[dir] = null;
+  if (mediaRecorder && mediaRecorder.state !== 'inactive') {
+    mediaRecorder.stop();
   }
+  mediaRecorder = null;
+  activeRecordingDir = null;
   isRecording[dir] = false;
   const btn = document.getElementById(dir === 'zh' ? 'micZh' : 'micJa');
   btn.textContent = '🎤';
   btn.classList.remove('recording');
   setLabel(dir, dir === 'zh' ? '按下說話' : 'ここを押して話す');
+}
+
+// ===== Gemini 音訊辨識 + 翻譯（一次完成）=====
+async function translateAudio(blob, dir) {
+  if (isTranslating[dir]) return;
+  const isZh = dir === 'zh';
+  const resultEl = document.getElementById(isZh ? 'resultJa' : 'resultZh');
+
+  isTranslating[dir] = true;
+  resultEl.className = 'result-text loading-dots';
+  resultEl.textContent = '辨識中';
+
+  try {
+    // 轉 base64
+    const base64 = await new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onloadend = () => resolve(reader.result.split(',')[1]);
+      reader.onerror = reject;
+      reader.readAsDataURL(blob);
+    });
+
+    const mimeType = blob.type.split(';')[0] || 'audio/mp4';
+    const prompt = isZh
+      ? '請辨識這段音訊中的繁體中文，並翻譯成自然口語的日文（旅遊場景）。只輸出日文翻譯結果，不要其他說明。'
+      : '請辨識這段音訊中的日文，並翻譯成自然口語的繁體中文。只輸出中文翻譯結果，不要其他說明。';
+
+    const res = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          contents: [{
+            parts: [
+              { inline_data: { mime_type: mimeType, data: base64 } },
+              { text: prompt }
+            ]
+          }],
+          generationConfig: { temperature: 0.2, maxOutputTokens: 300 }
+        })
+      }
+    );
+
+    if (!res.ok) {
+      const err = await res.json();
+      throw new Error(err.error?.message || `HTTP ${res.status}`);
+    }
+
+    const data = await res.json();
+    const out = data.candidates?.[0]?.content?.parts?.[0]?.text?.trim();
+    if (!out) throw new Error('空回應');
+
+    resultEl.className = 'result-text';
+    resultEl.textContent = out;
+
+    const outDir = isZh ? 'ja' : 'zh';
+    lastTranslated[outDir] = out;
+    const speakBtn = document.getElementById(isZh ? 'speakJa' : 'speakZh');
+    if (speakBtn) speakBtn.disabled = false;
+
+    speakText(out, isZh ? 'ja-JP' : 'zh-TW');
+
+  } catch(e) {
+    resultEl.className = 'result-text placeholder';
+    resultEl.textContent = isZh ? '按下麥克風說中文' : 'ボタンを押して話してください';
+    showToast(`失敗：${e.message}`);
+  } finally {
+    isTranslating[dir] = false;
+  }
 }
 
 function setLabel(dir, text) {
@@ -550,6 +607,7 @@ async function translate(dir, text) {
     resultEl.className = 'result-text placeholder';
     resultEl.textContent = isZh ? '按下麥克風說中文' : 'ボタンを押して話してください';
     showToast(`翻譯失敗：${e.message}`);
+
   } finally {
     isTranslating[dir] = false;
   }
