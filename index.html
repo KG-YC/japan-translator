@@ -484,7 +484,7 @@ let convoStream = null, convoAudioCtx = null, convoAnalyser = null;
 let convoRecorder = null, convoChunks = [];
 let convoIsRunning = false, convoIsProcessing = false;
 let hasSpoken = false, silenceStart = null;
-let convoAnimFrame = null;
+let convoSilenceTimer = null;
 const SILENCE_THRESHOLD = 12;  // 0-100 RMS
 const SILENCE_DURATION  = 900;  // ms（短一點讓對話更流暢）
 const MAX_HISTORY = 6;          // 最多保留幾句供上下文
@@ -651,7 +651,8 @@ function startConvo() {
       // iOS 需要明確 resume AudioContext，否則音量偵測全部回傳 0
       convoAudioCtx.resume().then(() => {
         startConvoRecorder();
-        monitorSilence();
+        // 用 setInterval 取代 requestAnimationFrame，iOS 背景不會被節流
+        convoSilenceTimer = setInterval(monitorSilence, 100);
       });
 
     })
@@ -660,7 +661,7 @@ function startConvo() {
 
 function stopConvo() {
   convoIsRunning = false;
-  if (convoAnimFrame) { cancelAnimationFrame(convoAnimFrame); convoAnimFrame = null; }
+  if (convoSilenceTimer) { clearInterval(convoSilenceTimer); convoSilenceTimer = null; }
   if (convoRecorder && convoRecorder.state !== 'inactive') {
     convoRecorder.onstop = null; // 停止時不處理最後一段
     convoRecorder.stop();
@@ -710,14 +711,12 @@ function monitorSilence() {
   } else if (hasSpoken) {
     if (!silenceStart) silenceStart = Date.now();
     else if (Date.now() - silenceStart > SILENCE_DURATION) {
-      // 偵測到足夠靜音，切斷這段
       if (convoRecorder && convoRecorder.state === 'recording') {
         convoRecorder.stop(); // onstop 會自動重啟
       }
       hasSpoken = false; silenceStart = null;
     }
   }
-  convoAnimFrame = requestAnimationFrame(monitorSilence);
 }
 
 async function processConvoBlob(blob) {
@@ -744,7 +743,8 @@ async function processConvoBlob(blob) {
     const prompt = `你是日本旅遊翻譯助手，場景涵蓋餐廳、景點、交通、購物、住宿、票務、租賃。
 翻譯時使用自然口語；對日本店員/服務人員用敬語（です/ます體）。${historyText}
 這段音訊可能是繁體中文或日文。辨識語言後翻譯（中文→日文，日文→繁體中文）。
-只輸出JSON，不要其他文字：{"lang":"zh或ja","original":"原文","translation":"翻譯結果"}`;
+如果音訊是靜音、雜訊、或聽不清楚，original 回傳空字串。
+只輸出JSON，不要其他文字：{"lang":"zh或ja","original":"原文或空字串","translation":"翻譯結果或空字串"}`;
     const raw = await geminiAudio(blob, prompt);
     let result;
     try {
