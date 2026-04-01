@@ -239,7 +239,7 @@
     </div>
   </div>
 
-  <div class="chat-status" id="chatStatus">準備就緒</div>
+  <div class="chat-status" id="chatStatus">按下麥克風說話</div>
 
   <div class="chat-bar">
     <div style="display:flex;gap:8px">
@@ -277,11 +277,7 @@
 const GEMINI_URL = key =>
   `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${key}`;
 
-// iOS Safari 只有 stop() 才能可靠觸發 ondataavailable
-// 固定 3 秒切段；偵測到語音後多等 1.5 秒再開始下一段（防重複）
-const CHUNK_DURATION  = 3000;  // 每段錄音長度
-const MIN_SPEECH_BLOB = 10000; // blob < 這個 = 靜音雜訊，直接丟棄
-const SPEECH_COOLDOWN = 1500;  // 偵測到語音後的冷卻時間（防同句被下一段重複）
+// 對話模式：按下錄音、再按送出（完全不依賴靜音偵測，iOS 最穩定）
 
 const MAX_HISTORY = 6;       // 對話記憶保留句數
 
@@ -448,62 +444,59 @@ function replay(dir) {
 // ══════════════════════════════════════════════
 // ── 對話模式 ──
 // ══════════════════════════════════════════════
+// 按下 = 開始錄音，再按 = 停止並送出
 function toggleConvo() {
-  if (convoRunning) stopConvo(); else startConvo();
-}
-
-function startConvo() {
-  if (!apiKey) { openKeyModal(); return; }
-  navigator.mediaDevices.getUserMedia({ audio: true }).then(stream => {
-    convoStream = stream;
-    convoRunning = true;
-    document.getElementById('chatMic').textContent = '⏹';
-    document.getElementById('chatMic').classList.add('rec');
-    setChatStatus('聆聽中…', true);
-    startConvoRecorder();
-  }).catch(() => toast('無法存取麥克風，請確認權限'));
-}
-
-function stopConvo() {
-  convoRunning = false;
-  if (convoRec && convoRec.state !== 'inactive') {
-    convoRec.ondataavailable = null; convoRec.onstop = null; convoRec.stop();
+  if (!convoStream) {
+    // 還沒有 stream，先取得麥克風授權
+    if (!apiKey) { openKeyModal(); return; }
+    navigator.mediaDevices.getUserMedia({ audio: true }).then(stream => {
+      convoStream = stream;
+      startConvoRec();
+    }).catch(() => toast('無法存取麥克風，請確認權限'));
+  } else if (convoRunning) {
+    stopConvoRec(); // 停止並送出
+  } else {
+    startConvoRec();
   }
-  convoRec = null;
-  if (convoStream) { convoStream.getTracks().forEach(t => t.stop()); convoStream = null; }
-  document.getElementById('chatMic').textContent = '🎤';
-  document.getElementById('chatMic').classList.remove('rec');
-  setChatStatus('準備就緒', false);
 }
 
-function startConvoRecorder() {
-  if (!convoRunning || !convoStream) return;
-
+function startConvoRec() {
+  if (!convoStream) return;
   const mime = bestMime();
   const rec = new MediaRecorder(convoStream, mime ? { mimeType: mime } : {});
   convoRec = rec;
   const chunks = [];
 
   rec.ondataavailable = e => { if (e.data.size > 0) chunks.push(e.data); };
-
   rec.onstop = () => {
-    if (!convoRunning) return;
     const blob = new Blob(chunks, { type: rec.mimeType || 'audio/mp4' });
-
-    if (blob.size >= MIN_SPEECH_BLOB) {
-      // 有語音：送出，冷卻後再開始下一段（避免同句被重複抓）
+    if (blob.size > 3000) {
       setChatStatus('辨識中…', true);
       enqueueConvoBlob(blob);
-      setTimeout(() => { if (convoRunning) startConvoRecorder(); }, SPEECH_COOLDOWN);
     } else {
-      // 靜音：立即開始下一段
-      setChatStatus('聆聽中…', true);
-      startConvoRecorder();
+      setChatStatus('按下麥克風說話', false);
     }
   };
 
   rec.start();
-  setTimeout(() => { if (rec.state === 'recording') rec.stop(); }, CHUNK_DURATION);
+  convoRunning = true;
+  const btn = document.getElementById('chatMic');
+  btn.textContent = '⏹'; btn.classList.add('rec');
+  setChatStatus('錄音中… 說完再按一次', true);
+}
+
+function stopConvoRec() {
+  if (convoRec && convoRec.state !== 'inactive') convoRec.stop();
+  convoRec = null;
+  convoRunning = false;
+  const btn = document.getElementById('chatMic');
+  btn.textContent = '🎤'; btn.classList.remove('rec');
+}
+
+function stopConvo() {
+  stopConvoRec();
+  if (convoStream) { convoStream.getTracks().forEach(t => t.stop()); convoStream = null; }
+  setChatStatus('按下麥克風說話', false);
 }
 
 // 佇列處理，避免同時送多個 API 請求
@@ -620,8 +613,9 @@ function scrollChat() {
 }
 
 function clearChat() {
-  stopConvo();
+  stopConvo(); // 也會停 stream
   convoHistory = []; convoQueue = []; lastTranscription = '';
+  convoStream = null; // clearChat 後下次按鈕重新取得授權
   document.getElementById('chatLog').innerHTML =
     '<div class="chat-empty" id="chatEmpty"><div class="chat-empty-icon">🎤</div><div>按下麥克風開始對話</div></div>';
   setChatStatus('準備就緒', false);
