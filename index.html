@@ -277,11 +277,9 @@
 const GEMINI_URL = key =>
   `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${key}`;
 
-// blob-size 語音偵測（完全不需要 AudioContext）
-const CHUNK_MS      = 500;   // MediaRecorder timeslice
-const SPEECH_BYTES  = 2000;  // chunk > 這個 = 偵測到說話
-const SILENCE_BYTES = 900;   // chunk < 這個 = 靜音
-const SILENT_NEEDED = 2;     // 連續幾個靜音 chunk 才送出（= 1 秒靜音）
+// 固定時長錄音（iOS Safari 不支援 timeslice，ondataavailable 只在 stop() 觸發）
+const CHUNK_DURATION = 4000;  // 每段錄音長度（ms）
+const MIN_SPEECH_BLOB = 8000; // blob 小於這個 = 靜音，直接丟棄
 
 const MAX_HISTORY = 6;       // 對話記憶保留句數
 
@@ -478,44 +476,33 @@ function stopConvo() {
 function startConvoRecorder() {
   if (!convoRunning || !convoStream) return;
   const mime = bestMime();
-  convoRec = new MediaRecorder(convoStream, mime ? { mimeType: mime } : {});
+  const rec = new MediaRecorder(convoStream, mime ? { mimeType: mime } : {});
+  convoRec = rec;
+  const chunks = [];
 
-  // ── blob-size 語音偵測 ──
-  // 不用 AudioContext，靠壓縮後 chunk 大小判斷有沒有聲音
-  // 說話時 chunk 大（壓縮率低），靜音時 chunk 小（幾乎全壓掉）
-  let accChunks = [];   // 本次語音段累積的 chunks
-  let hasSpeech = false;
-  let silentCnt = 0;
+  rec.ondataavailable = e => { if (e.data.size > 0) chunks.push(e.data); };
 
-  convoRec.ondataavailable = e => {
-    if (!convoRunning) return;
-    const sz = e.data.size;
+  rec.onstop = () => {
+    const blob = new Blob(chunks, { type: rec.mimeType || 'audio/mp4' });
 
-    if (sz >= SPEECH_BYTES) {
-      // 語音 chunk：重置靜音計數
-      hasSpeech = true;
-      silentCnt = 0;
-      accChunks.push(e.data);
-      setChatStatus('偵測到說話…', true);
-
-    } else if (hasSpeech) {
-      // 說話後出現非語音 chunk → 全部算靜音（不分死區）
-      accChunks.push(e.data);
-      silentCnt++;
-
-      if (silentCnt >= SILENT_NEEDED) {
-        // 足夠靜音 → 切段送出
-        const blob = new Blob(accChunks, { type: convoRec.mimeType || 'audio/mp4' });
-        accChunks = []; hasSpeech = false; silentCnt = 0;
-        setChatStatus('辨識中…', true);
-        enqueueConvoBlob(blob);
-      }
+    // blob 太小 = 靜音，丟棄；夠大才送 Gemini
+    if (blob.size >= MIN_SPEECH_BLOB) {
+      setChatStatus('辨識中…', true);
+      enqueueConvoBlob(blob);
+    } else {
+      setChatStatus('聆聽中…', true);
     }
-    // 說話前靜音直接丟棄
+
+    // 立即開始下一段
+    if (convoRunning) startConvoRecorder();
   };
 
-  convoRec.onstop = null;
-  convoRec.start(CHUNK_MS);
+  // iOS Safari 不支援 timeslice，用 start() 無參數
+  // 固定 CHUNK_DURATION 後手動 stop()
+  rec.start();
+  setTimeout(() => {
+    if (rec.state === 'recording') rec.stop();
+  }, CHUNK_DURATION);
 }
 
 // 佇列處理，避免同時送多個 API 請求
