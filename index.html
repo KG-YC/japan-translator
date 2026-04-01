@@ -277,9 +277,10 @@
 const GEMINI_URL = key =>
   `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${key}`;
 
-// 固定時長錄音（iOS Safari 不支援 timeslice，ondataavailable 只在 stop() 觸發）
-const CHUNK_DURATION = 4000;  // 每段錄音長度（ms）
-const MIN_SPEECH_BLOB = 8000; // blob 小於這個 = 靜音，直接丟棄
+// requestData() 每 500ms 觸發 ondataavailable（iOS 14.5+ 支援，timeslice 不支援但這個可以）
+const REQ_INTERVAL_MS = 500;  // 手動觸發間隔
+const SPEECH_BYTES    = 2000; // chunk > 這個 = 偵測到說話
+const SILENT_NEEDED   = 2;    // 連續靜音 chunk 數 = 1 秒後切段
 
 const MAX_HISTORY = 6;       // 對話記憶保留句數
 
@@ -296,10 +297,11 @@ let transLast = { ja: '', zh: '' };
 let typeTimer = { zh: null, ja: null };
 
 // 對話
-let convoStream = null, convoRec = null;
+let convoStream = null, convoRec = null, convoReqTimer = null;
 let convoRunning = false, convoProcessing = false;
 let convoHistory = [];   // [{lang, original, translation}]
 let convoQueue = [];     // 待處理 blob 佇列
+let lastTranscription = ''; // 去重複用
 
 // TTS
 let speaking = false;
@@ -463,6 +465,7 @@ function startConvo() {
 
 function stopConvo() {
   convoRunning = false;
+  if (convoReqTimer) { clearInterval(convoReqTimer); convoReqTimer = null; }
   if (convoRec && convoRec.state !== 'inactive') {
     convoRec.ondataavailable = null; convoRec.onstop = null; convoRec.stop();
   }
@@ -475,34 +478,54 @@ function stopConvo() {
 
 function startConvoRecorder() {
   if (!convoRunning || !convoStream) return;
+  if (convoReqTimer) { clearInterval(convoReqTimer); convoReqTimer = null; }
+
   const mime = bestMime();
   const rec = new MediaRecorder(convoStream, mime ? { mimeType: mime } : {});
   convoRec = rec;
-  const chunks = [];
 
-  rec.ondataavailable = e => { if (e.data.size > 0) chunks.push(e.data); };
+  let speechChunks = [];
+  let hasSpeech = false;
+  let silentCnt = 0;
 
-  rec.onstop = () => {
-    const blob = new Blob(chunks, { type: rec.mimeType || 'audio/mp4' });
+  rec.ondataavailable = e => {
+    if (!convoRunning || e.data.size === 0) return;
+    const sz = e.data.size;
 
-    // blob 太小 = 靜音，丟棄；夠大才送 Gemini
-    if (blob.size >= MIN_SPEECH_BLOB) {
-      setChatStatus('辨識中…', true);
-      enqueueConvoBlob(blob);
+    if (sz >= SPEECH_BYTES) {
+      // 偵測到語音
+      hasSpeech = true; silentCnt = 0;
+      speechChunks.push(e.data);
+      setChatStatus('偵測到說話…', true);
+
+    } else if (hasSpeech) {
+      // 語音後靜音
+      speechChunks.push(e.data);
+      silentCnt++;
+      if (silentCnt >= SILENT_NEEDED) {
+        // 切段：停止本輪錄音，送出
+        clearInterval(convoReqTimer); convoReqTimer = null;
+        rec.onstop = null;
+        rec.stop();
+        const blob = new Blob(speechChunks, { type: rec.mimeType || 'audio/mp4' });
+        speechChunks = []; hasSpeech = false; silentCnt = 0;
+        setChatStatus('辨識中…', true);
+        enqueueConvoBlob(blob);
+        // 重新開始監聽
+        setTimeout(() => { if (convoRunning) startConvoRecorder(); }, 100);
+      }
     } else {
       setChatStatus('聆聽中…', true);
     }
-
-    // 立即開始下一段
-    if (convoRunning) startConvoRecorder();
   };
 
-  // iOS Safari 不支援 timeslice，用 start() 無參數
-  // 固定 CHUNK_DURATION 後手動 stop()
+  rec.onstop = null;
   rec.start();
-  setTimeout(() => {
-    if (rec.state === 'recording') rec.stop();
-  }, CHUNK_DURATION);
+
+  // 每 500ms 手動觸發 ondataavailable（requestData 在 iOS 14.5+ 可用）
+  convoReqTimer = setInterval(() => {
+    if (rec.state === 'recording') rec.requestData();
+  }, REQ_INTERVAL_MS);
 }
 
 // 佇列處理，避免同時送多個 API 請求
@@ -561,10 +584,12 @@ Output ONLY valid JSON, no other text:
 
     loader.remove();
 
-    // 靜音/雜訊 → 略過，不顯示
-    if (!result?.original?.trim()) {
-      return;
-    }
+    // 靜音/雜訊 → 略過
+    if (!result?.original?.trim()) return;
+
+    // 與上一句完全相同 → 去重複
+    if (result.original.trim() === lastTranscription) return;
+    lastTranscription = result.original.trim();
 
     // 存入記憶
     convoHistory.push(result);
@@ -618,7 +643,7 @@ function scrollChat() {
 
 function clearChat() {
   stopConvo();
-  convoHistory = []; convoQueue = [];
+  convoHistory = []; convoQueue = []; lastTranscription = '';
   document.getElementById('chatLog').innerHTML =
     '<div class="chat-empty" id="chatEmpty"><div class="chat-empty-icon">🎤</div><div>按下麥克風開始對話</div></div>';
   setChatStatus('準備就緒', false);
