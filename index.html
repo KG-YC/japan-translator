@@ -648,8 +648,12 @@ function startConvo() {
       document.getElementById('convoMicBtn').classList.add('recording');
       setConvoStatus('聆聽中...', true);
 
-      startConvoRecorder();
-      monitorSilence();
+      // iOS 需要明確 resume AudioContext，否則音量偵測全部回傳 0
+      convoAudioCtx.resume().then(() => {
+        startConvoRecorder();
+        monitorSilence();
+      });
+
     })
     .catch(() => showToast('無法存取麥克風，請確認權限'));
 }
@@ -684,6 +688,13 @@ function startConvoRecorder() {
   };
   convoRecorder.start(100);
   hasSpoken = false; silenceStart = null;
+
+  // 保底：最多錄 15 秒強制切斷，避免 AudioContext 失效時卡死
+  setTimeout(() => {
+    if (convoRecorder && convoRecorder.state === 'recording') {
+      convoRecorder.stop();
+    }
+  }, 15000);
 }
 
 function monitorSilence() {
