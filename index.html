@@ -492,26 +492,26 @@ function startConvoRecorder() {
     const sz = e.data.size;
 
     if (sz >= SPEECH_BYTES) {
-      // 語音 chunk
+      // 語音 chunk：重置靜音計數
       hasSpeech = true;
       silentCnt = 0;
       accChunks.push(e.data);
       setChatStatus('偵測到說話…', true);
 
     } else if (hasSpeech) {
-      // 語音後的靜音 chunk
+      // 說話後出現非語音 chunk → 全部算靜音（不分死區）
       accChunks.push(e.data);
-      if (sz < SILENCE_BYTES) silentCnt++;
+      silentCnt++;
 
       if (silentCnt >= SILENT_NEEDED) {
-        // 足夠靜音 → 切段
+        // 足夠靜音 → 切段送出
         const blob = new Blob(accChunks, { type: convoRec.mimeType || 'audio/mp4' });
         accChunks = []; hasSpeech = false; silentCnt = 0;
         setChatStatus('辨識中…', true);
         enqueueConvoBlob(blob);
       }
     }
-    // 說話前靜音 chunk 直接丟棄（不累積無意義靜音）
+    // 說話前靜音直接丟棄
   };
 
   convoRec.onstop = null;
