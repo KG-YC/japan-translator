@@ -914,7 +914,10 @@ function stopSpeech() {
 // ============================================================
 // API Key
 // ============================================================
-function showApiModal() { document.getElementById('apiModal').classList.add('show'); }
+function showApiModal() {
+  document.getElementById('apiKeyInput').value = apiKey;
+  document.getElementById('apiModal').classList.add('show');
+}
 function hideApiModal() { document.getElementById('apiModal').classList.remove('show'); }
 function saveApiKey() {
   const k = document.getElementById('apiKeyInput').value.trim();
