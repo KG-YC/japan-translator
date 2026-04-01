@@ -277,10 +277,11 @@
 const GEMINI_URL = key =>
   `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${key}`;
 
-// requestData() 每 500ms 觸發 ondataavailable（iOS 14.5+ 支援，timeslice 不支援但這個可以）
-const REQ_INTERVAL_MS = 500;  // 手動觸發間隔
-const SPEECH_BYTES    = 2000; // chunk > 這個 = 偵測到說話
-const SILENT_NEEDED   = 2;    // 連續靜音 chunk 數 = 1 秒後切段
+// iOS Safari 只有 stop() 才能可靠觸發 ondataavailable
+// 固定 3 秒切段；偵測到語音後多等 1.5 秒再開始下一段（防重複）
+const CHUNK_DURATION  = 3000;  // 每段錄音長度
+const MIN_SPEECH_BLOB = 10000; // blob < 這個 = 靜音雜訊，直接丟棄
+const SPEECH_COOLDOWN = 1500;  // 偵測到語音後的冷卻時間（防同句被下一段重複）
 
 const MAX_HISTORY = 6;       // 對話記憶保留句數
 
@@ -465,7 +466,6 @@ function startConvo() {
 
 function stopConvo() {
   convoRunning = false;
-  if (convoReqTimer) { clearInterval(convoReqTimer); convoReqTimer = null; }
   if (convoRec && convoRec.state !== 'inactive') {
     convoRec.ondataavailable = null; convoRec.onstop = null; convoRec.stop();
   }
@@ -478,54 +478,32 @@ function stopConvo() {
 
 function startConvoRecorder() {
   if (!convoRunning || !convoStream) return;
-  if (convoReqTimer) { clearInterval(convoReqTimer); convoReqTimer = null; }
 
   const mime = bestMime();
   const rec = new MediaRecorder(convoStream, mime ? { mimeType: mime } : {});
   convoRec = rec;
+  const chunks = [];
 
-  let speechChunks = [];
-  let hasSpeech = false;
-  let silentCnt = 0;
+  rec.ondataavailable = e => { if (e.data.size > 0) chunks.push(e.data); };
 
-  rec.ondataavailable = e => {
-    if (!convoRunning || e.data.size === 0) return;
-    const sz = e.data.size;
+  rec.onstop = () => {
+    if (!convoRunning) return;
+    const blob = new Blob(chunks, { type: rec.mimeType || 'audio/mp4' });
 
-    if (sz >= SPEECH_BYTES) {
-      // 偵測到語音
-      hasSpeech = true; silentCnt = 0;
-      speechChunks.push(e.data);
-      setChatStatus('偵測到說話…', true);
-
-    } else if (hasSpeech) {
-      // 語音後靜音
-      speechChunks.push(e.data);
-      silentCnt++;
-      if (silentCnt >= SILENT_NEEDED) {
-        // 切段：停止本輪錄音，送出
-        clearInterval(convoReqTimer); convoReqTimer = null;
-        rec.onstop = null;
-        rec.stop();
-        const blob = new Blob(speechChunks, { type: rec.mimeType || 'audio/mp4' });
-        speechChunks = []; hasSpeech = false; silentCnt = 0;
-        setChatStatus('辨識中…', true);
-        enqueueConvoBlob(blob);
-        // 重新開始監聽
-        setTimeout(() => { if (convoRunning) startConvoRecorder(); }, 100);
-      }
+    if (blob.size >= MIN_SPEECH_BLOB) {
+      // 有語音：送出，冷卻後再開始下一段（避免同句被重複抓）
+      setChatStatus('辨識中…', true);
+      enqueueConvoBlob(blob);
+      setTimeout(() => { if (convoRunning) startConvoRecorder(); }, SPEECH_COOLDOWN);
     } else {
+      // 靜音：立即開始下一段
       setChatStatus('聆聽中…', true);
+      startConvoRecorder();
     }
   };
 
-  rec.onstop = null;
   rec.start();
-
-  // 每 500ms 手動觸發 ondataavailable（requestData 在 iOS 14.5+ 可用）
-  convoReqTimer = setInterval(() => {
-    if (rec.state === 'recording') rec.requestData();
-  }, REQ_INTERVAL_MS);
+  setTimeout(() => { if (rec.state === 'recording') rec.stop(); }, CHUNK_DURATION);
 }
 
 // 佇列處理，避免同時送多個 API 請求
