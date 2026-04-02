@@ -309,6 +309,8 @@ let lastTranscription = ''; // 去重複用
 // 自動模式（Web Speech API interim/final）
 let autoMode = false, autoRunning = false;
 let autoRecognition = null, chatLang = 'zh'; // 'zh' | 'ja'
+let langCycleTimer = null;
+const LANG_CYCLE_MS = 4000; // 靜音多久後輪換語言（ms）
 
 // TTS
 let speaking = false;
@@ -511,12 +513,20 @@ function startRecognition() {
   const rec = new SR();
   autoRecognition = rec;
   rec.lang = chatLang === 'zh' ? 'zh-TW' : 'ja-JP';
-  rec.continuous = false;    // false 在 iOS 更穩定
+  rec.continuous = false;
   rec.interimResults = true;
   rec.maxAlternatives = 1;
 
+  // 靜音超過 LANG_CYCLE_MS → 輪換語言
+  langCycleTimer = setTimeout(() => {
+    chatLang = chatLang === 'zh' ? 'ja' : 'zh';
+    document.getElementById('langBtn').textContent = chatLang === 'zh' ? '🇹🇼' : '🇯🇵';
+    try { rec.abort(); } catch(e) {}
+  }, LANG_CYCLE_MS);
+
   rec.onresult = e => {
-    if (speaking) return; // TTS 播放中忽略
+    clearTimeout(langCycleTimer); // 有人說話，取消輪換
+    if (speaking) return;
     let interim = '', final = '';
     for (let i = e.resultIndex; i < e.results.length; i++) {
       if (e.results[i].isFinal) final += e.results[i][0].transcript;
@@ -527,12 +537,13 @@ function startRecognition() {
   };
 
   rec.onerror = e => {
+    clearTimeout(langCycleTimer);
     if (e.error === 'not-allowed') { toast('麥克風權限被拒絕'); stopAutoSession(); }
-    // no-speech / aborted → 讓 onend 重啟
   };
 
   rec.onend = () => {
-    if (autoRunning) setTimeout(startRecognition, 200); // 持續聆聽
+    clearTimeout(langCycleTimer);
+    if (autoRunning) setTimeout(startRecognition, 150);
   };
 
   try { rec.start(); } catch(e) {}
@@ -553,9 +564,7 @@ async function handleFinalSpeech(text) {
     if (convoHistory.length > MAX_HISTORY) convoHistory.shift();
     addChatBubble(result);
     speakText(translation, isZh ? 'ja-JP' : 'zh-TW');
-    // 自動切換到對方語言
-    chatLang = isZh ? 'ja' : 'zh';
-    document.getElementById('langBtn').textContent = chatLang === 'zh' ? '🇹🇼' : '🇯🇵';
+    // 不自動切換語言，讓輪替機制自動偵測下一個說話者
   } catch(e) {
     toast('翻譯失敗：' + e.message);
     setChatStatus(chatLang === 'zh' ? '🇹🇼 等待說話…' : '🇯🇵 話してください…', true);
@@ -573,6 +582,7 @@ function toggleChatLang() {
 
 function stopAutoSession() {
   autoRunning = false;
+  clearTimeout(langCycleTimer); langCycleTimer = null;
   if (autoRecognition) { try { autoRecognition.stop(); } catch(e) {} autoRecognition = null; }
   document.getElementById('chatMic').textContent = '🎤';
   document.getElementById('chatMic').classList.remove('rec');
