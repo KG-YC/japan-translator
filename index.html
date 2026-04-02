@@ -309,7 +309,7 @@ let lastTranscription = ''; // 去重複用
 // 自動模式（Web Speech API interim/final）
 let autoMode = false, autoRunning = false;
 let autoRecognition = null, chatLang = 'zh'; // 'zh' | 'ja'
-let langCycleTimer = null;
+let langCycleTimer = null, pausingForTTS = false;
 const LANG_CYCLE_MS = 4000; // 靜音多久後輪換語言（ms）
 
 // TTS
@@ -543,7 +543,7 @@ function startRecognition() {
 
   rec.onend = () => {
     clearTimeout(langCycleTimer);
-    if (autoRunning) setTimeout(startRecognition, 150);
+    if (autoRunning && !pausingForTTS) setTimeout(startRecognition, 150);
   };
 
   try { rec.start(); } catch(e) {}
@@ -821,6 +821,7 @@ function speakText(text, lang) {
   stopSpeech();
   // 自動模式：TTS 播放時暫停辨識，避免喇叭聲被當成輸入
   if (autoRunning && autoRecognition) {
+    pausingForTTS = true;           // 先設旗標，再 stop（onend 會立即觸發）
     try { autoRecognition.stop(); } catch(e) {}
     autoRecognition = null;
   }
@@ -829,7 +830,8 @@ function speakText(text, lang) {
   u.onstart = () => { speaking = true; };
   const done = () => {
     speaking = false;
-    if (autoRunning) setTimeout(startRecognition, 600); // TTS 結束後重啟辨識
+    pausingForTTS = false;
+    if (autoRunning) setTimeout(startRecognition, 600); // TTS 結束後才重啟
   };
   u.onend = done; u.onerror = done;
   speechSynthesis.speak(u);
