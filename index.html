@@ -522,7 +522,7 @@ function startRecognition() {
   const rec = new SR();
   autoRecognition = rec;
   rec.lang = chatLang === 'zh' ? 'zh-TW' : 'ja-JP';
-  rec.continuous = false;
+  rec.continuous = true;
   rec.interimResults = true;
   rec.maxAlternatives = 1;
 
@@ -845,12 +845,16 @@ function speakText(text, lang) {
   const u = new SpeechSynthesisUtterance(text);
   u.lang = lang; u.rate = 0.9;
   u.onstart = () => { speaking = true; };
+  let ttsGuard;
   const done = () => {
+    clearTimeout(ttsGuard);
     speaking = false;
     pausingForTTS = false;
-    if (autoRunning) setTimeout(startRecognition, 600); // TTS 結束後才重啟
+    if (autoRunning) setTimeout(startRecognition, 600);
   };
   u.onend = done; u.onerror = done;
+  // iOS 有時不觸發 onend，用字數估算強制保底
+  ttsGuard = setTimeout(done, Math.max(3000, text.length * 200));
   speechSynthesis.speak(u);
 }
 
