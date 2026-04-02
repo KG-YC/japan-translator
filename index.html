@@ -24,9 +24,16 @@
     .mode-tab.active { background: white; color: #1a1a2e; }
     .btn-key {
       background: rgba(255,255,255,0.09); border: none; border-radius: 8px;
-      padding: 7px 13px; color: #777; font-size: 13px; cursor: pointer;
+      padding: 7px 13px; color: #777; font-size: 13px; cursor: pointer; flex-shrink: 0;
     }
     .btn-key.ok { color: #68d391; }
+    .lang-header-btn {
+      flex: 1; margin: 0 10px; background: rgba(255,255,255,0.1);
+      border: 1px solid rgba(255,255,255,0.18); border-radius: 20px;
+      padding: 7px 0; color: #e2e8f0; font-size: 15px; font-weight: 700;
+      cursor: pointer; letter-spacing: .5px; transition: background .2s;
+    }
+    .lang-header-btn.ja { background: rgba(43,108,176,0.35); border-color: rgba(99,179,237,0.4); }
 
     /* ── Screens ── */
     .screen { display: none; flex-direction: column; height: calc(100vh - 52px); }
@@ -184,6 +191,7 @@
     <button class="mode-tab active" id="tabT" onclick="switchMode('translate')">對譯</button>
     <button class="mode-tab"        id="tabC" onclick="switchMode('convo')">對話</button>
   </div>
+  <button class="lang-header-btn" id="langHeaderBtn" onclick="toggleChatLang()" style="display:none">🇹🇼 中文</button>
   <button class="btn-key" id="keyBtn" onclick="openKeyModal()">Key</button>
 </div>
 
@@ -340,6 +348,7 @@ function switchMode(m) {
   });
   document.getElementById('tabT').classList.toggle('active', m === 'translate');
   document.getElementById('tabC').classList.toggle('active', m === 'convo');
+  document.getElementById('langHeaderBtn').style.display = m === 'convo' ? '' : 'none';
   if (m === 'translate') stopConvo();
 }
 
@@ -520,7 +529,7 @@ function startRecognition() {
   // 靜音超過 LANG_CYCLE_MS → 輪換語言
   langCycleTimer = setTimeout(() => {
     chatLang = chatLang === 'zh' ? 'ja' : 'zh';
-    document.getElementById('langBtn').textContent = chatLang === 'zh' ? '🇹🇼' : '🇯🇵';
+    updateLangBtns();
     try { rec.abort(); } catch(e) {}
   }, LANG_CYCLE_MS);
 
@@ -571,11 +580,19 @@ async function handleFinalSpeech(text) {
   }
 }
 
+function updateLangBtns() {
+  const isZh = chatLang === 'zh';
+  document.getElementById('langBtn').textContent = isZh ? '🇹🇼' : '🇯🇵';
+  const hBtn = document.getElementById('langHeaderBtn');
+  hBtn.textContent = isZh ? '🇹🇼 中文' : '🇯🇵 日本語';
+  hBtn.classList.toggle('ja', !isZh);
+}
+
 function toggleChatLang() {
   chatLang = chatLang === 'zh' ? 'ja' : 'zh';
-  document.getElementById('langBtn').textContent = chatLang === 'zh' ? '🇹🇼' : '🇯🇵';
+  updateLangBtns();
   if (autoRunning && autoRecognition) {
-    try { autoRecognition.stop(); } catch(e) {} // onend 會重啟，用新語言
+    try { autoRecognition.stop(); } catch(e) {}
   }
   toast(chatLang === 'zh' ? '切換：等待中文輸入' : '切換：日本語入力待ち');
 }
