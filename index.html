@@ -522,7 +522,7 @@ function startAutoChunk() {
   rec.start();
   // 固定時間後自動切段送出
   autoChunkTimer = setTimeout(() => {
-    if (convoRec && convoRec.state === 'active') convoRec.stop();
+    if (convoRec && convoRec.state !== 'inactive') convoRec.stop();
   }, AUTO_INTERVAL);
 }
 
