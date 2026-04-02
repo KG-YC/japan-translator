@@ -126,6 +126,8 @@
     }
     .chat-icon-btn { width: 42px; height: 42px; border-radius: 50%; border: none; background: #f0f2f5; color: #555; font-size: 18px; cursor: pointer; display: flex; align-items: center; justify-content: center; }
     .lang-indicator { flex: 1; display: flex; align-items: center; justify-content: center; gap: 6px; background: #f0f2f5; border-radius: 20px; padding: 8px 12px; font-size: 13px; font-weight: 600; color: #444; }
+    .mode-toggle-btn { flex: 1; background: #f0f2f5; border: none; border-radius: 20px; padding: 10px 12px; font-size: 13px; font-weight: 700; color: #555; cursor: pointer; transition: all .2s; }
+    .mode-toggle-btn.auto-on { background: #16a34a; color: white; }
     .chat-mic {
       width: 54px; height: 54px; border-radius: 50%; border: none;
       background: #2563eb; color: white; font-size: 22px; cursor: pointer;
@@ -249,7 +251,7 @@
       <button class="chat-icon-btn" onclick="clearChat()" title="清除">🗑️</button>
       <button class="chat-icon-btn" onclick="openKeyModal()" title="設定">⚙️</button>
     </div>
-    <div class="lang-indicator">🇹🇼 中 ⇄ 日 🇯🇵</div>
+    <button class="mode-toggle-btn" id="autoBtn" onclick="toggleChatMode()">🤚 手動</button>
     <button class="chat-mic" id="chatMic" onclick="toggleConvo()">🎤</button>
   </div>
 
@@ -302,6 +304,15 @@ let convoRunning = false, convoProcessing = false;
 let convoHistory = [];   // [{lang, original, translation}]
 let convoQueue = [];     // 待處理 blob 佇列
 let lastTranscription = ''; // 去重複用
+
+// 自動模式（AudioContext VAD）
+let autoMode = false, autoRunning = false;
+let autoAudioCtx = null, autoAnalyserNode = null, autoDataArr = null;
+let autoVadTimer = null;
+let autoSpeechDetected = false, autoLastSpeechTime = 0, autoChunkStart = 0;
+const AUTO_THRESH   = 12;     // 音量閾值 0-255（靜音~5，說話~20-60）
+const AUTO_SILENCE  = 1800;   // 靜音多久後送出（ms）
+const AUTO_MAX      = 15000;  // 單段最長錄音（ms）
 
 // TTS
 let speaking = false;
@@ -457,20 +468,101 @@ function replay(dir) {
 // ══════════════════════════════════════════════
 // ── 對話模式 ──
 // ══════════════════════════════════════════════
-// 按下 = 開始錄音，再按 = 停止並送出
+// 切換手動/自動模式
+function toggleChatMode() {
+  autoMode = !autoMode;
+  const btn = document.getElementById('autoBtn');
+  btn.textContent = autoMode ? '🤖 自動' : '🤚 手動';
+  btn.classList.toggle('auto-on', autoMode);
+  if (!autoMode && autoRunning) stopAutoSession();
+}
+
+// 按下麥克風：手動=按下錄音再按送出；自動=開啟/關閉自動偵測
 function toggleConvo() {
+  if (autoMode) {
+    if (autoRunning) stopAutoSession();
+    else startAutoSession();
+    return;
+  }
+  // 手動模式（原本邏輯）
   if (!convoStream) {
-    // 還沒有 stream，先取得麥克風授權
     if (!apiKey) { openKeyModal(); return; }
     navigator.mediaDevices.getUserMedia({ audio: true }).then(stream => {
       convoStream = stream;
       startConvoRec();
     }).catch(() => toast('無法存取麥克風，請確認權限'));
   } else if (convoRunning) {
-    stopConvoRec(); // 停止並送出
+    stopConvoRec();
   } else {
     startConvoRec();
   }
+}
+
+// ── 自動模式 ──
+function startAutoSession() {
+  if (!apiKey) { openKeyModal(); return; }
+  navigator.mediaDevices.getUserMedia({ audio: true }).then(stream => {
+    convoStream = stream;
+    autoRunning = true;
+    // AudioContext 音量偵測
+    autoAudioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    autoAudioCtx.resume().then(() => {
+      const src = autoAudioCtx.createMediaStreamSource(stream);
+      autoAnalyserNode = autoAudioCtx.createAnalyser();
+      autoAnalyserNode.fftSize = 512;
+      src.connect(autoAnalyserNode);
+      autoDataArr = new Uint8Array(autoAnalyserNode.frequencyBinCount);
+      startAutoChunk();
+      startVADLoop();
+    });
+    const btn = document.getElementById('chatMic');
+    btn.textContent = '⏹'; btn.classList.add('rec');
+    setChatStatus('自動聆聽中… 說話後停頓即送出', true);
+  }).catch(() => toast('無法存取麥克風，請確認權限'));
+}
+
+function startAutoChunk() {
+  if (!convoStream || !autoRunning) return;
+  const mime = bestMime();
+  const rec = new MediaRecorder(convoStream, mime ? { mimeType: mime } : {});
+  convoRec = rec;
+  const chunks = [];
+  autoSpeechDetected = false;
+  autoChunkStart = Date.now();
+  rec.ondataavailable = e => { if (e.data.size > 0) chunks.push(e.data); };
+  rec.onstop = () => {
+    const blob = new Blob(chunks, { type: rec.mimeType || 'audio/mp4' });
+    if (blob.size > 5000 && autoSpeechDetected) enqueueConvoBlob(blob);
+    if (autoRunning) setTimeout(startAutoChunk, 150); // 馬上開始下一段
+  };
+  rec.start();
+}
+
+function startVADLoop() {
+  clearInterval(autoVadTimer);
+  autoVadTimer = setInterval(() => {
+    if (!autoRunning || !autoAnalyserNode || !convoRec || convoRec.state !== 'active') return;
+    autoAnalyserNode.getByteFrequencyData(autoDataArr);
+    const vol = autoDataArr.reduce((a, b) => a + b, 0) / autoDataArr.length;
+    if (vol > AUTO_THRESH) { autoSpeechDetected = true; autoLastSpeechTime = Date.now(); }
+    const elapsed  = Date.now() - autoChunkStart;
+    const silence  = autoSpeechDetected ? Date.now() - autoLastSpeechTime : 0;
+    if ((autoSpeechDetected && silence > AUTO_SILENCE) || elapsed > AUTO_MAX) {
+      if (convoRec && convoRec.state === 'active') convoRec.stop();
+    }
+  }, 100);
+}
+
+function stopAutoSession() {
+  autoRunning = false;
+  clearInterval(autoVadTimer); autoVadTimer = null;
+  if (convoRec && convoRec.state !== 'inactive') convoRec.stop();
+  convoRec = null;
+  if (convoStream) { convoStream.getTracks().forEach(t => t.stop()); convoStream = null; }
+  if (autoAudioCtx) { autoAudioCtx.close(); autoAudioCtx = null; autoAnalyserNode = null; autoDataArr = null; }
+  const btn = document.getElementById('chatMic');
+  btn.textContent = '🎤'; btn.classList.remove('rec');
+  setChatStatus('按下麥克風說話', false);
 }
 
 function startConvoRec() {
@@ -507,6 +599,7 @@ function stopConvoRec() {
 }
 
 function stopConvo() {
+  if (autoRunning) { stopAutoSession(); return; }
   stopConvoRec();
   if (convoStream) { convoStream.getTracks().forEach(t => t.stop()); convoStream = null; }
   setChatStatus('按下麥克風說話', false);
@@ -626,9 +719,10 @@ function scrollChat() {
 }
 
 function clearChat() {
-  stopConvo(); // 也會停 stream
+  if (autoRunning) stopAutoSession();
+  stopConvo();
   convoHistory = []; convoQueue = []; lastTranscription = '';
-  convoStream = null; // clearChat 後下次按鈕重新取得授權
+  convoStream = null;
   document.getElementById('chatLog').innerHTML =
     '<div class="chat-empty" id="chatEmpty"><div class="chat-empty-icon">🎤</div><div>按下麥克風開始對話</div></div>';
   setChatStatus('準備就緒', false);
