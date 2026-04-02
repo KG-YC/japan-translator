@@ -250,6 +250,7 @@
     <div style="display:flex;gap:8px">
       <button class="chat-icon-btn" onclick="clearChat()" title="清除">🗑️</button>
       <button class="chat-icon-btn" onclick="openKeyModal()" title="設定">⚙️</button>
+      <button class="chat-icon-btn" id="langBtn" onclick="toggleChatLang()" title="切換語言">🇹🇼</button>
     </div>
     <button class="mode-toggle-btn" id="autoBtn" onclick="toggleChatMode()">🤚 手動</button>
     <button class="chat-mic" id="chatMic" onclick="toggleConvo()">🎤</button>
@@ -305,10 +306,9 @@ let convoHistory = [];   // [{lang, original, translation}]
 let convoQueue = [];     // 待處理 blob 佇列
 let lastTranscription = ''; // 去重複用
 
-// 自動模式（固定時間切段，iOS 最可靠）
+// 自動模式（Web Speech API interim/final）
 let autoMode = false, autoRunning = false;
-let autoChunkTimer = null;
-const AUTO_INTERVAL = 4500;   // 每段錄音長度（ms）
+let autoRecognition = null, chatLang = 'zh'; // 'zh' | 'ja'
 
 // TTS
 let speaking = false;
@@ -496,44 +496,86 @@ function toggleConvo() {
 
 // ── 自動模式 ──
 function startAutoSession() {
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (!SR) { toast('此瀏覽器不支援語音辨識，請使用 Safari'); return; }
   if (!apiKey) { openKeyModal(); return; }
-  navigator.mediaDevices.getUserMedia({ audio: true }).then(stream => {
-    convoStream = stream;
-    autoRunning = true;
-    startAutoChunk();
-    const btn = document.getElementById('chatMic');
-    btn.textContent = '⏹'; btn.classList.add('rec');
-    setChatStatus('自動聆聽中… 每 4.5 秒自動辨識', true);
-  }).catch(() => toast('無法存取麥克風，請確認權限'));
+  autoRunning = true;
+  document.getElementById('chatMic').textContent = '⏹';
+  document.getElementById('chatMic').classList.add('rec');
+  startRecognition();
 }
 
-function startAutoChunk() {
-  if (!convoStream || !autoRunning) return;
-  const mime = bestMime();
-  const rec = new MediaRecorder(convoStream, mime ? { mimeType: mime } : {});
-  convoRec = rec;
-  const chunks = [];
-  rec.ondataavailable = e => { if (e.data.size > 0) chunks.push(e.data); };
-  rec.onstop = () => {
-    const blob = new Blob(chunks, { type: rec.mimeType || 'audio/mp4' });
-    if (blob.size > 3000) enqueueConvoBlob(blob);
-    if (autoRunning) setTimeout(startAutoChunk, 100);
+function startRecognition() {
+  if (!autoRunning) return;
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  const rec = new SR();
+  autoRecognition = rec;
+  rec.lang = chatLang === 'zh' ? 'zh-TW' : 'ja-JP';
+  rec.continuous = false;    // false 在 iOS 更穩定
+  rec.interimResults = true;
+  rec.maxAlternatives = 1;
+
+  rec.onresult = e => {
+    if (speaking) return; // TTS 播放中忽略
+    let interim = '', final = '';
+    for (let i = e.resultIndex; i < e.results.length; i++) {
+      if (e.results[i].isFinal) final += e.results[i][0].transcript;
+      else interim += e.results[i][0].transcript;
+    }
+    if (interim) setChatStatus((chatLang === 'zh' ? '🇹🇼 ' : '🇯🇵 ') + interim, true);
+    if (final.trim()) handleFinalSpeech(final.trim());
   };
-  rec.start();
-  // 固定時間後自動切段送出
-  autoChunkTimer = setTimeout(() => {
-    if (convoRec && convoRec.state !== 'inactive') convoRec.stop();
-  }, AUTO_INTERVAL);
+
+  rec.onerror = e => {
+    if (e.error === 'not-allowed') { toast('麥克風權限被拒絕'); stopAutoSession(); }
+    // no-speech / aborted → 讓 onend 重啟
+  };
+
+  rec.onend = () => {
+    if (autoRunning) setTimeout(startRecognition, 200); // 持續聆聽
+  };
+
+  try { rec.start(); } catch(e) {}
+  setChatStatus(chatLang === 'zh' ? '🇹🇼 等待說話…' : '🇯🇵 話してください…', true);
+}
+
+async function handleFinalSpeech(text) {
+  if (!text) return;
+  setChatStatus('翻譯中…', true);
+  const isZh = chatLang === 'zh';
+  const prompt = isZh
+    ? `Translate this Mandarin Chinese to natural polite Japanese (desu/masu, travel context). Output ONLY the Japanese translation:\n${text}`
+    : `Translate this Japanese to natural Traditional Chinese (travel context). Output ONLY the Traditional Chinese translation:\n${text}`;
+  try {
+    const translation = await callGeminiText(prompt);
+    const result = { lang: chatLang, original: text, translation };
+    convoHistory.push(result);
+    if (convoHistory.length > MAX_HISTORY) convoHistory.shift();
+    addChatBubble(result);
+    speakText(translation, isZh ? 'ja-JP' : 'zh-TW');
+    // 自動切換到對方語言
+    chatLang = isZh ? 'ja' : 'zh';
+    document.getElementById('langBtn').textContent = chatLang === 'zh' ? '🇹🇼' : '🇯🇵';
+  } catch(e) {
+    toast('翻譯失敗：' + e.message);
+    setChatStatus(chatLang === 'zh' ? '🇹🇼 等待說話…' : '🇯🇵 話してください…', true);
+  }
+}
+
+function toggleChatLang() {
+  chatLang = chatLang === 'zh' ? 'ja' : 'zh';
+  document.getElementById('langBtn').textContent = chatLang === 'zh' ? '🇹🇼' : '🇯🇵';
+  if (autoRunning && autoRecognition) {
+    try { autoRecognition.stop(); } catch(e) {} // onend 會重啟，用新語言
+  }
+  toast(chatLang === 'zh' ? '切換：等待中文輸入' : '切換：日本語入力待ち');
 }
 
 function stopAutoSession() {
   autoRunning = false;
-  clearTimeout(autoChunkTimer); autoChunkTimer = null;
-  if (convoRec && convoRec.state !== 'inactive') convoRec.stop();
-  convoRec = null;
-  if (convoStream) { convoStream.getTracks().forEach(t => t.stop()); convoStream = null; }
-  const btn = document.getElementById('chatMic');
-  btn.textContent = '🎤'; btn.classList.remove('rec');
+  if (autoRecognition) { try { autoRecognition.stop(); } catch(e) {} autoRecognition = null; }
+  document.getElementById('chatMic').textContent = '🎤';
+  document.getElementById('chatMic').classList.remove('rec');
   setChatStatus('按下麥克風說話', false);
 }
 
@@ -767,10 +809,18 @@ function bestMime() {
 function speakText(text, lang) {
   if (!window.speechSynthesis || !text) return;
   stopSpeech();
+  // 自動模式：TTS 播放時暫停辨識，避免喇叭聲被當成輸入
+  if (autoRunning && autoRecognition) {
+    try { autoRecognition.stop(); } catch(e) {}
+    autoRecognition = null;
+  }
   const u = new SpeechSynthesisUtterance(text);
   u.lang = lang; u.rate = 0.9;
   u.onstart = () => { speaking = true; };
-  const done = () => { speaking = false; };
+  const done = () => {
+    speaking = false;
+    if (autoRunning) setTimeout(startRecognition, 600); // TTS 結束後重啟辨識
+  };
   u.onend = done; u.onerror = done;
   speechSynthesis.speak(u);
 }
