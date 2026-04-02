@@ -310,9 +310,9 @@ let autoMode = false, autoRunning = false;
 let autoAudioCtx = null, autoAnalyserNode = null, autoDataArr = null;
 let autoVadTimer = null;
 let autoSpeechDetected = false, autoLastSpeechTime = 0, autoChunkStart = 0;
-const AUTO_THRESH   = 12;     // 音量閾值 0-255（靜音~5，說話~20-60）
-const AUTO_SILENCE  = 1800;   // 靜音多久後送出（ms）
-const AUTO_MAX      = 15000;  // 單段最長錄音（ms）
+const AUTO_THRESH   = 8;      // 音量閾值（頻率桶平均，靜音~2，說話~15+）
+const AUTO_SILENCE  = 1500;   // 靜音多久後送出（ms）
+const AUTO_MAX      = 8000;   // 單段最長錄音（ms，8s 強制送出）
 
 // TTS
 let speaking = false;
@@ -501,23 +501,33 @@ function toggleConvo() {
 // ── 自動模式 ──
 function startAutoSession() {
   if (!apiKey) { openKeyModal(); return; }
-  navigator.mediaDevices.getUserMedia({ audio: true }).then(stream => {
+
+  // ★ iOS 關鍵：AudioContext 必須在用戶手勢同步建立，不能放在 Promise .then() 裡
+  try {
+    autoAudioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  } catch(e) { autoAudioCtx = null; }
+
+  navigator.mediaDevices.getUserMedia({ audio: true }).then(async stream => {
     convoStream = stream;
     autoRunning = true;
-    // AudioContext 音量偵測
-    autoAudioCtx = new (window.AudioContext || window.webkitAudioContext)();
-    autoAudioCtx.resume().then(() => {
-      const src = autoAudioCtx.createMediaStreamSource(stream);
-      autoAnalyserNode = autoAudioCtx.createAnalyser();
-      autoAnalyserNode.fftSize = 512;
-      src.connect(autoAnalyserNode);
-      autoDataArr = new Uint8Array(autoAnalyserNode.frequencyBinCount);
-      startAutoChunk();
-      startVADLoop();
-    });
+
+    // 連接麥克風到分析器（失敗也沒關係，會走 max 時間 fallback）
+    if (autoAudioCtx) {
+      try {
+        if (autoAudioCtx.state !== 'running') await autoAudioCtx.resume();
+        const src = autoAudioCtx.createMediaStreamSource(stream);
+        autoAnalyserNode = autoAudioCtx.createAnalyser();
+        autoAnalyserNode.fftSize = 512;
+        src.connect(autoAnalyserNode);
+        autoDataArr = new Uint8Array(autoAnalyserNode.frequencyBinCount);
+      } catch(e) { autoAnalyserNode = null; }
+    }
+
+    startAutoChunk();
+    startVADLoop();
     const btn = document.getElementById('chatMic');
     btn.textContent = '⏹'; btn.classList.add('rec');
-    setChatStatus('自動聆聽中… 說話後停頓即送出', true);
+    setChatStatus('自動聆聽中… 說完後停頓即發送', true);
   }).catch(() => toast('無法存取麥克風，請確認權限'));
 }
 
@@ -527,13 +537,18 @@ function startAutoChunk() {
   const rec = new MediaRecorder(convoStream, mime ? { mimeType: mime } : {});
   convoRec = rec;
   const chunks = [];
+  const chunkStart = Date.now();   // ★ 本地變數，onstop 閉包用這個
   autoSpeechDetected = false;
-  autoChunkStart = Date.now();
+  autoChunkStart = chunkStart;
   rec.ondataavailable = e => { if (e.data.size > 0) chunks.push(e.data); };
   rec.onstop = () => {
+    const elapsed = Date.now() - chunkStart;
     const blob = new Blob(chunks, { type: rec.mimeType || 'audio/mp4' });
-    if (blob.size > 5000 && autoSpeechDetected) enqueueConvoBlob(blob);
-    if (autoRunning) setTimeout(startAutoChunk, 150); // 馬上開始下一段
+    // ★ fallback：VAD 失敗時，到達 max 時間也要送出
+    if (blob.size > 3000 && (autoSpeechDetected || elapsed >= AUTO_MAX - 1000)) {
+      enqueueConvoBlob(blob);
+    }
+    if (autoRunning) setTimeout(startAutoChunk, 150);
   };
   rec.start();
 }
@@ -541,12 +556,21 @@ function startAutoChunk() {
 function startVADLoop() {
   clearInterval(autoVadTimer);
   autoVadTimer = setInterval(() => {
-    if (!autoRunning || !autoAnalyserNode || !convoRec || convoRec.state !== 'active') return;
-    autoAnalyserNode.getByteFrequencyData(autoDataArr);
-    const vol = autoDataArr.reduce((a, b) => a + b, 0) / autoDataArr.length;
-    if (vol > AUTO_THRESH) { autoSpeechDetected = true; autoLastSpeechTime = Date.now(); }
-    const elapsed  = Date.now() - autoChunkStart;
-    const silence  = autoSpeechDetected ? Date.now() - autoLastSpeechTime : 0;
+    if (!autoRunning || !convoRec || convoRec.state !== 'active') return;
+    const elapsed = Date.now() - autoChunkStart;
+
+    // AudioContext 音量偵測（聚焦在語音頻段 ~86Hz-3.4kHz）
+    if (autoAnalyserNode && autoDataArr) {
+      autoAnalyserNode.getByteFrequencyData(autoDataArr);
+      const lo = Math.max(1, Math.floor(autoDataArr.length * 0.02));
+      const hi = Math.floor(autoDataArr.length * 0.4);
+      let sum = 0;
+      for (let i = lo; i < hi; i++) sum += autoDataArr[i];
+      const vol = sum / (hi - lo);
+      if (vol > AUTO_THRESH) { autoSpeechDetected = true; autoLastSpeechTime = Date.now(); }
+    }
+
+    const silence = autoSpeechDetected ? Date.now() - autoLastSpeechTime : 0;
     if ((autoSpeechDetected && silence > AUTO_SILENCE) || elapsed > AUTO_MAX) {
       if (convoRec && convoRec.state === 'active') convoRec.stop();
     }
