@@ -773,6 +773,19 @@ function setChatStatus(t, live) {
 // ══════════════════════════════════════════════
 // Gemini API
 // ══════════════════════════════════════════════
+function extractGeminiText(data) {
+  // 2.5 Flash 思考模式會產生多個 parts，thought=true 是推理內容，要過濾掉
+  const parts = data.candidates?.[0]?.content?.parts || [];
+  const text = parts
+    .filter(p => !p.thought)
+    .map(p => p.text || '')
+    .join('\n')
+    .replace(/```json\s*/gi, '')
+    .replace(/```\s*/g, '')
+    .trim();
+  return text;
+}
+
 async function callGeminiAudio(blob, promptText) {
   if (!apiKey) throw new Error('未設定 API Key');
   const b64 = await blobToB64(blob);
@@ -785,12 +798,16 @@ async function callGeminiAudio(blob, promptText) {
         { inline_data: { mime_type: mime, data: b64 } },
         { text: promptText }
       ]}],
-      generationConfig: { temperature: 0.1, maxOutputTokens: 400 }
+      generationConfig: {
+        temperature: 0.1,
+        maxOutputTokens: 400,
+        thinkingConfig: { thinkingBudget: 0 }
+      }
     })
   });
   if (!res.ok) { const e = await res.json(); throw new Error(e.error?.message || `HTTP ${res.status}`); }
   const data = await res.json();
-  const out = data.candidates?.[0]?.content?.parts?.[0]?.text?.trim();
+  const out = extractGeminiText(data);
   if (!out) throw new Error('空回應');
   return out;
 }
@@ -802,12 +819,16 @@ async function callGeminiText(promptText) {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
       contents: [{ parts: [{ text: promptText }] }],
-      generationConfig: { temperature: 0.1, maxOutputTokens: 300 }
+      generationConfig: {
+        temperature: 0.1,
+        maxOutputTokens: 300,
+        thinkingConfig: { thinkingBudget: 0 }
+      }
     })
   });
   if (!res.ok) { const e = await res.json(); throw new Error(e.error?.message || `HTTP ${res.status}`); }
   const data = await res.json();
-  const out = data.candidates?.[0]?.content?.parts?.[0]?.text?.trim();
+  const out = extractGeminiText(data);
   if (!out) throw new Error('空回應');
   return out;
 }
