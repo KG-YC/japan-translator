@@ -335,8 +335,9 @@ const LANG_NOTES = {
   en: 'Use natural, friendly English. Casual tone for travel situations.',
 };
 
+const GEMINI_MODEL = 'gemini-2.5-flash'; // 更新此處即可換模型
 const GEMINI_URL = key =>
-  `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${key}`;
+  `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${key}`;
 
 const MAX_HISTORY = 6;
 
