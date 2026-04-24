@@ -171,7 +171,7 @@
     .btn-cancel { background: rgba(255,255,255,.07); color: #a0aec0; border: none; border-radius: 10px; padding: 12px 16px; font-size: 15px; cursor: pointer; }
 
     /* ── Toast ── */
-    .toast { position: fixed; bottom: 90px; left: 50%; transform: translateX(-50%); background: rgba(0,0,0,.82); color: white; padding: 10px 20px; border-radius: 20px; font-size: 14px; z-index: 200; opacity: 0; transition: opacity .25s; pointer-events: none; white-space: nowrap; }
+    .toast { position: fixed; bottom: 90px; left: 50%; transform: translateX(-50%); background: rgba(0,0,0,.82); color: white; padding: 10px 20px; border-radius: 20px; font-size: 14px; z-index: 200; opacity: 0; transition: opacity .25s; pointer-events: none; white-space: normal; max-width: 90vw; text-align: center; word-break: break-word; }
     .toast.show { opacity: 1; }
 
     /* ── Animations ── */
@@ -897,6 +897,17 @@ function setChatStatus(t, live) {
 // ══════════════════════════════════════════════
 // Gemini API
 // ══════════════════════════════════════════════
+function friendlyApiError(err, status) {
+  const msg = err?.message || '';
+  if (status === 429 || msg.includes('quota') || msg.includes('exhausted') || msg.includes('RESOURCE_EXHAUSTED'))
+    return 'API 配額已用盡，請稍後再試，或至 aistudio.google.com 重新取得 Key';
+  if (status === 400 && msg.includes('API_KEY'))
+    return 'API Key 無效，請點右上角 Key 按鈕重新設定';
+  if (status === 403)
+    return 'API Key 沒有權限，請確認 Key 是否正確';
+  return msg || `API 錯誤 (HTTP ${status})`;
+}
+
 async function callGeminiAudio(blob, promptText) {
   if (!apiKey) throw new Error('未設定 API Key');
   const b64 = await blobToB64(blob);
@@ -912,7 +923,7 @@ async function callGeminiAudio(blob, promptText) {
       generationConfig: { temperature: 0.1, maxOutputTokens: 400 }
     })
   });
-  if (!res.ok) { const e = await res.json(); throw new Error(e.error?.message || `HTTP ${res.status}`); }
+  if (!res.ok) { const e = await res.json(); throw new Error(friendlyApiError(e.error, res.status)); }
   const data = await res.json();
   const out = data.candidates?.[0]?.content?.parts?.[0]?.text?.trim();
   if (!out) throw new Error('空回應');
@@ -929,7 +940,7 @@ async function callGeminiText(promptText) {
       generationConfig: { temperature: 0.1, maxOutputTokens: 300 }
     })
   });
-  if (!res.ok) { const e = await res.json(); throw new Error(e.error?.message || `HTTP ${res.status}`); }
+  if (!res.ok) { const e = await res.json(); throw new Error(friendlyApiError(e.error, res.status)); }
   const data = await res.json();
   const out = data.candidates?.[0]?.content?.parts?.[0]?.text?.trim();
   if (!out) throw new Error('空回應');
